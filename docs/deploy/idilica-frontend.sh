@@ -3,7 +3,7 @@
 # The Build and Deploy workflow (main.yml) SSHes in and runs that file after
 # scp'ing frontend.tar.gz (the built dist/) to /home/ellebkey/apps/idilica.
 # After editing this file, copy it to the droplet:
-#   scp docs/deploy/idilica-frontend.sh ellebkey@<host>:~/idilica-frontend && ssh ellebkey@<host> chmod +x idilica-frontend
+#   scp docs/deploy/idilica-frontend.sh root@<host>:~/idilica-frontend && ssh root@<host> chmod +x idilica-frontend
 set -e
 
 DEPLOY_START=$(date +%s)

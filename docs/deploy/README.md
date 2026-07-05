@@ -7,7 +7,7 @@ health check vía nginx y rollback si no responde.
 
 Setup del servidor (una vez):
 
-1. Copiar el script: `scp docs/deploy/idilica-frontend.sh ellebkey@<host>:~/idilica-frontend`
+1. Copiar el script: `scp docs/deploy/idilica-frontend.sh root@<host>:~/idilica-frontend`
    y `chmod +x ~/idilica-frontend`.
 2. Instalar `nginx-idilica.conf` (instrucciones dentro del archivo) + certbot.
 
