@@ -1,38 +1,42 @@
-# Idílica — App (costeo de recetas)
+# Idílica — App de costeo de recetas
 
-Web app móvil (PWA) para costeo de recetas. React 19 + Vite + TypeScript +
-Tailwind CSS 4. Misma arquitectura y convenciones que `maguey-mobile-react`.
+PWA mobile-first para Idílica (panadería gourmet): costos de recetas **en vivo**,
+semáforo de rentabilidad, merma medida con báscula y ganancia real con gastos
+de operación. Pensada para usarse en la cocina, con una mano.
 
-## Estado
+**React 19 · Vite · TypeScript · Tailwind CSS 4 · PWA instalable**
 
-Base del proyecto: shell navegable + autenticación + tokens de diseño.
-Las pantallas de recetas, ingredientes y merma se construyen sobre esta base
-(ver `prompt-diseno.md` en la raíz del proyecto para el diseño de esas pantallas).
+## Qué hace
 
-Ya incluido:
+- **Inicio** — búsqueda global (recetas + ingredientes), tarjetas de resumen y
+  la lista "Necesitan tu atención": recetas fuera de objetivo y precios con
+  más de 60 días sin actualizar.
+- **Recetas** — filtro por categoría y cards con costo total, costo por porción
+  y food cost con semáforo (verde/ámbar/rojo según el objetivo configurable).
+- **Editor de receta** — barra de costo sticky que recalcula a cada tecleo,
+  ingredientes con autocomplete, **subrecetas anidadas**, dona de composición
+  del costo, ganancia real (ya con gastos de operación), pasos, 14 alérgenos
+  y confirmación al salir sin guardar.
+- **Ingredientes** — costo "por kilo ya con desperdicio", badge del origen de
+  la merma y el botón `$` para el flujo más frecuente: *nuevo precio* → pantalla
+  de **impacto** (qué recetas cambian de color y cuánto).
+- **Wizard de merma** — tres pesadas con la báscula y el porcentaje queda
+  guardado como "medido".
+- **Ficha técnica** imprimible (carta/A4) para el equipo de cocina.
+- **Ajustes** — food cost objetivo (mueve todos los semáforos), gastos de
+  operación con resumen vivo, tema claro/oscuro y miembros.
 
-- Login contra el backend, sesión con refresh token e interceptor de 401.
-- Shell con tab bar (Inicio · Recetas · Ingredientes · Ajustes), PWA instalable.
-- Sistema de diseño en variables CSS con **paleta cálida provisional** (crema /
-  chocolate / durazno / salvia) y modo oscuro — reemplazar los hex por el diseño
-  aprobado; la arquitectura de tokens ya es la definitiva. Ver `src/styles/main.css`.
-- Componentes base (Button, Card, Field, AppBar, EmptyState, Skeleton) y utilidades
-  de formato es-MX (dinero MXN, porcentaje, semáforo de food cost).
+Los costos nunca se guardan: el catálogo se carga en un `GET` y el motor
+(`src/lib/costeo.ts`) los deriva al instante; cada cambio persiste vía API.
 
-## Requisitos
+## Desarrollo
 
-- Node ≥ 20
-- El backend (`idilica-backend`) corriendo en `http://localhost:4050`
-
-## Puesta en marcha
+Requisitos: Node ≥ 20 y el backend (`idillica-backend`) corriendo en `:4051`.
 
 ```bash
 npm install
-npm run dev        # app en http://localhost:5273
+npm run dev        # http://localhost:5273 (proxy /api → :4051)
 ```
-
-Vite hace proxy de `/api` hacia el backend en `:4050`, así que no hace falta
-configurar CORS ni URLs en desarrollo.
 
 ## Scripts
 
@@ -45,11 +49,18 @@ configurar CORS ni URLs en desarrollo.
 
 ```
 src/
-  api/          clientes del backend (auth, cocinas)
-  auth/         sesión, contexto y guardia de rutas
-  components/   componentes de UI reutilizables
+  api/          clientes del backend (auth, cocinas, catálogo)
+  auth/         sesión con refresh token, contexto y guardia de rutas
+  components/   sistema de diseño (SemaforoMargen, DonaCosto, BarraCostoSticky…)
   hooks/        useFetch, useOnline
-  lib/          http, formato, tema, config
-  screens/      una carpeta por pantalla (en español)
-  styles/       main.css con los tokens de diseño
+  lib/          costeo.ts (motor), http (interceptor 401), formato, tema
+  screens/      una carpeta por pantalla
+  state/        CatalogoContext: catálogo + mutadores
+  styles/       tokens de diseño (crema/choco/burgundy + modo noche)
 ```
+
+## Producción
+
+CI en PRs (typecheck + build). En cada push a `master`, el pipeline construye,
+sube `frontend.tar.gz` al servidor y ejecuta el script de release (verificación
+de integridad, **swap atómico** y rollback automático) — ver `docs/deploy/`.
