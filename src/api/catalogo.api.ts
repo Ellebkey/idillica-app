@@ -1,0 +1,179 @@
+// Tipos y llamadas del catálogo — espejo de los DTOs del backend Go.
+// El backend persiste; el motor de costos (lib/costeo.ts) calcula en vivo.
+import { api } from '../lib/http';
+
+export type UnidadBase = 'kg' | 'L' | 'pieza';
+export type MermaOrigen = 'referencia' | 'manual' | 'medido';
+
+export interface HistorialPrecio {
+  precio: number;
+  fecha: string;
+}
+
+export interface Producto {
+  id: string;
+  marca: string;
+  presentacion: string;
+  cantidad: number; // contenido en unidad base
+  precio: number;
+  proveedor: string;
+  activo: boolean;
+  orden: number;
+  precioActualizadoAt: string;
+  historial: HistorialPrecio[];
+}
+
+export interface Ingrediente {
+  id: string;
+  nombre: string;
+  unidadBase: UnidadBase;
+  merma: { pct: number; origen: MermaOrigen };
+  productos: Producto[];
+}
+
+export interface Linea {
+  id: string;
+  ingredienteId?: string;
+  recetaId?: string;
+  cantidad: number; // unidad base del ingrediente, o kg si es subreceta
+  orden: number;
+}
+
+export interface Receta {
+  id: string;
+  nombre: string;
+  categoria: string;
+  porciones: number;
+  etiqueta: string;
+  etiquetaSingular: string;
+  rendimientoKg: number;
+  precioVenta: number | null;
+  ivaPct: number;
+  esSubreceta: boolean;
+  alergenos: string[];
+  pasos: string[];
+  fotos: string[];
+  lineas: Linea[];
+}
+
+export interface CocinaCatalogo {
+  id: string;
+  name: string;
+  moneda: string;
+  impuestoDefault: number;
+  foodCostObjetivo: number; // fracción (0.30)
+  gastoSueldos: number;
+  gastoGas: number;
+  gastoLuz: number;
+  gastoEquipo: number;
+  comprasIngredientesMes: number;
+  rol: 'owner' | 'editor' | 'viewer';
+}
+
+export interface Catalogo {
+  cocina: CocinaCatalogo;
+  ingredientes: Ingrediente[];
+  recetas: Receta[];
+  categorias: string[];
+  alergenos: string[];
+}
+
+// ===== Entradas =====
+
+export interface ProductoInput {
+  marca: string;
+  presentacion: string;
+  cantidad: number;
+  precio: number;
+  proveedor?: string;
+}
+
+export interface CreateIngredienteInput {
+  nombre: string;
+  unidadBase: UnidadBase;
+  mermaPct?: number;
+  mermaOrigen?: MermaOrigen;
+  productos: ProductoInput[];
+}
+
+export interface LineaInput {
+  ingredienteId?: string;
+  recetaId?: string;
+  cantidad: number;
+}
+
+export interface SaveRecetaInput {
+  nombre: string;
+  categoria: string;
+  porciones: number;
+  etiqueta: string;
+  etiquetaSingular: string;
+  rendimientoKg: number;
+  precioVenta: number | null;
+  ivaPct: number;
+  esSubreceta: boolean;
+  alergenos: string[];
+  pasos: string[];
+  fotos: string[];
+  lineas: LineaInput[];
+}
+
+export interface UpdateCocinaInput {
+  foodCostObjetivo?: number;
+  impuestoDefault?: number;
+  moneda?: string;
+  gastoSueldos?: number;
+  gastoGas?: number;
+  gastoLuz?: number;
+  gastoEquipo?: number;
+  comprasIngredientesMes?: number;
+}
+
+// ===== Llamadas =====
+
+export function getCatalogo(cocinaId: string): Promise<Catalogo> {
+  return api<Catalogo>(`/cocinas/${cocinaId}/catalogo`);
+}
+
+export function crearIngrediente(cocinaId: string, input: CreateIngredienteInput): Promise<Ingrediente> {
+  return api<Ingrediente>(`/cocinas/${cocinaId}/ingredientes`, { method: 'POST', body: input });
+}
+
+export function nuevoPrecio(productoId: string, precio: number): Promise<Ingrediente> {
+  return api<Ingrediente>(`/productos/${productoId}/precio`, { method: 'PUT', body: { precio } });
+}
+
+export function agregarProducto(ingredienteId: string, input: ProductoInput): Promise<Ingrediente> {
+  return api<Ingrediente>(`/ingredientes/${ingredienteId}/productos`, { method: 'POST', body: input });
+}
+
+export function activarProducto(ingredienteId: string, productoId: string): Promise<Ingrediente> {
+  return api<Ingrediente>(`/ingredientes/${ingredienteId}/producto-activo/${productoId}`, { method: 'PUT' });
+}
+
+export function setMerma(ingredienteId: string, pct: number, origen: MermaOrigen): Promise<Ingrediente> {
+  return api<Ingrediente>(`/ingredientes/${ingredienteId}/merma`, { method: 'PUT', body: { pct, origen } });
+}
+
+export function agregarMedicion(
+  ingredienteId: string,
+  pesos: { pesoEntero: number; pesoLimpio: number; aprovechado: number },
+): Promise<Ingrediente> {
+  return api<Ingrediente>(`/ingredientes/${ingredienteId}/mediciones`, { method: 'POST', body: pesos });
+}
+
+export function crearReceta(cocinaId: string, input: SaveRecetaInput): Promise<Receta> {
+  return api<Receta>(`/cocinas/${cocinaId}/recetas`, { method: 'POST', body: input });
+}
+
+export function guardarReceta(recetaId: string, input: SaveRecetaInput): Promise<Receta> {
+  return api<Receta>(`/recetas/${recetaId}`, { method: 'PUT', body: input });
+}
+
+export function eliminarReceta(recetaId: string): Promise<void> {
+  return api<void>(`/recetas/${recetaId}`, { method: 'DELETE' });
+}
+
+export function actualizarCocina(cocinaId: string, input: UpdateCocinaInput): Promise<CocinaCatalogo> {
+  return api<CocinaCatalogo>(`/cocinas/${cocinaId}`, { method: 'PUT', body: input });
+}
