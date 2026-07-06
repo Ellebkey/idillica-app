@@ -48,7 +48,8 @@ export function CatalogoProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const cocinas = await listCocinas();
+      // El ?? [] blinda contra cualquier respuesta vacía inesperada
+      const cocinas = (await listCocinas()) ?? [];
       if (cocinas.length === 0) {
         setError('Tu cuenta no tiene cocina asignada.');
         setCatalogo(null);
