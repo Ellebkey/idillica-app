@@ -8,7 +8,19 @@ import { fmtQty, necesidadesReceta } from '../lib/costeo';
 import { useCatalogo } from '../state/CatalogoContext';
 import type { Receta } from '../api/catalogo.api';
 
-export function HojaProduccion({ receta, onClose }: { receta: Receta; onClose: () => void }) {
+export function HojaProduccion({
+  receta,
+  factor = 1,
+  porciones,
+  onClose,
+}: {
+  receta: Receta;
+  /** Multiplicador del lote ("preparé ×3"); 1 = lote base */
+  factor?: number;
+  /** Porciones escaladas, solo para el título ("30 piezas") */
+  porciones?: number | null;
+  onClose: () => void;
+}) {
   const { idx, producirReceta } = useCatalogo();
   const navigate = useNavigate();
   const [guardando, setGuardando] = useState(false);
@@ -16,11 +28,12 @@ export function HojaProduccion({ receta, onClose }: { receta: Receta; onClose: (
 
   const filas = idx
     ? [...necesidadesReceta(idx, receta.id)]
-        .map(([ingredienteId, cantidad]) => {
+        .map(([ingredienteId, base]) => {
           const ing = idx.ingredientes.get(ingredienteId);
           if (!ing) {
             return null;
           }
+          const cantidad = base * factor;
           const faltan = cantidad - ing.existencia;
           return { ing, cantidad, faltan };
         })
@@ -34,7 +47,7 @@ export function HojaProduccion({ receta, onClose }: { receta: Receta; onClose: (
     setGuardando(true);
     setError(null);
     try {
-      await producirReceta(receta.id);
+      await producirReceta(receta.id, factor);
       onClose();
       navigate('/inventario');
     } catch (err) {
@@ -51,7 +64,12 @@ export function HojaProduccion({ receta, onClose }: { receta: Receta; onClose: (
       >
         <div className="mx-auto mb-4 h-[5px] w-11 rounded-full bg-line" />
 
-        <div className="text-[19px] font-extrabold">Produje: {receta.nombre}</div>
+        <div className="text-[19px] font-extrabold">
+          Produje: {receta.nombre}
+          {factor !== 1 && porciones != null && (
+            <span className="font-bold text-ink-2"> · {porciones} {receta.etiqueta}</span>
+          )}
+        </div>
         <div className="mt-1 mb-3.5 text-[13.5px] text-ink-2">
           Descontaremos esto de tu inventario (incluye lo de las subrecetas):
         </div>

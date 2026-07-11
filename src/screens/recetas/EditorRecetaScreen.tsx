@@ -8,7 +8,7 @@ import {
   Button, DonaCosto, EstadoVacio, HeaderDetalle, HojaProduccion, ModalSalirSinGuardar, Skeleton,
 } from '../../components';
 import {
-  SEM, costoIngrediente, costoReceta, fmt, nivel, norm, tasaOperacion, unitShort,
+  SEM, cantidadSugerida, costoIngrediente, costoReceta, fmt, fmtQty, nivel, norm, tasaOperacion, unitShort,
 } from '../../lib/costeo';
 import type { Receta, SaveRecetaInput } from '../../api/catalogo.api';
 
@@ -95,6 +95,9 @@ export function EditorRecetaScreen() {
   const [addQ, setAddQ] = useState('');
   const [produccionAbierta, setProduccionAbierta] = useState(false);
   const [open, setOpen] = useState({ datos: true, ing: true, costo: true, elab: false, alerg: false, fotos: false });
+  // "Preparar para N": escala la VISTA (cantidades y costo del lote) sin
+  // tocar la receta base; null = lote base.
+  const [paraPorciones, setParaPorciones] = useState<number | null>(null);
   // Buffer del input numérico enfocado: conserva estados intermedios ("0.")
   // que parseFloat colapsaría y el re-render se comería.
   const [buf, setBuf] = useState<{ k: string; v: string } | null>(null);
@@ -224,6 +227,14 @@ export function EditorRecetaScreen() {
 
   const nLineas = draft.lineas.length;
   const nPasos = `${draft.pasos.length} ${draft.pasos.length === 1 ? 'paso' : 'pasos'}`;
+
+  // Escalado de la vista
+  const factor = paraPorciones != null && draft.porciones > 0 ? paraPorciones / draft.porciones : 1;
+  const escalando = factor !== 1;
+  const factorTxt = String(parseFloat(factor.toFixed(2)));
+  const haySensibles = draft.lineas.some(
+    (l) => l.ingredienteId && idx.ingredientes.get(l.ingredienteId)?.escalado !== 'normal',
+  );
 
   return (
     <div className="flex h-full flex-col bg-surface">
@@ -415,6 +426,55 @@ export function EditorRecetaScreen() {
 
           <Seccion titulo="Ingredientes" cuenta={nLineas} abierta={open.ing} onToggle={() => setOpen((o) => ({ ...o, ing: !o.ing }))}>
             <div className="px-2.5 pb-3.5">
+              {!esNueva && draft.porciones > 0 && (
+                <div className="mx-2 mb-2.5 rounded-[14px] bg-fill px-3.5 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[13px] font-semibold text-ink-2">Preparar para</div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        className="grid h-10 w-10 flex-none place-items-center rounded-[10px] border-[1.5px] border-line bg-card text-[18px] text-ink"
+                        onClick={() => setParaPorciones(Math.max(1, (paraPorciones ?? draft.porciones) - 1))}
+                      >
+                        −
+                      </button>
+                      <span className="min-w-[52px] text-center text-[17px] font-extrabold tabular-nums">
+                        {paraPorciones ?? draft.porciones}
+                      </span>
+                      <button
+                        type="button"
+                        className="grid h-10 w-10 flex-none place-items-center rounded-[10px] border-[1.5px] border-line bg-card text-[18px] text-ink"
+                        onClick={() => setParaPorciones((paraPorciones ?? draft.porciones) + 1)}
+                      >
+                        +
+                      </button>
+                      <span className="text-[13px] text-ink-2">{draft.etiqueta || 'porciones'}</span>
+                    </div>
+                  </div>
+                  {escalando && (
+                    <div className="mt-2.5 flex items-center justify-between gap-2 text-[13px]">
+                      <span className="font-extrabold text-burgundy-600">×{factorTxt}</span>
+                      <span className="text-ink-2">
+                        Costo del lote: <b className="tabular-nums">{fmt(costo * factor)}</b>
+                      </span>
+                      <button
+                        type="button"
+                        className="font-bold text-burgundy-600"
+                        onClick={() => setParaPorciones(null)}
+                      >
+                        Volver a {draft.porciones}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {escalando && factor >= 2 && haySensibles && (
+                <div className="mx-2 mb-2.5 rounded-[14px] px-3.5 py-2.5 text-[12.5px] font-semibold" style={{ background: '#F6ECD9', color: '#96691B' }}>
+                  Escalaste ×{factorTxt}: revisa los marcados — los leudantes y la sazón no suben lineal.
+                </div>
+              )}
+
               {draft.lineas.map((l, i) => {
                 const ing = l.ingredienteId ? idx.ingredientes.get(l.ingredienteId) : undefined;
                 const sub = l.recetaId ? idx.recetas.get(l.recetaId) : undefined;
@@ -441,53 +501,81 @@ export function EditorRecetaScreen() {
                         </div>
                       </button>
                       <div className="flex flex-none items-center gap-1.5">
-                        <label className="flex items-center gap-1 rounded-[10px] bg-[#EDE2EE] px-2 py-1.5">
-                          <input
-                            inputMode="decimal"
-                            value={bufVal(`linea-${i}`, String(l.cantidad))}
-                            onChange={(e) => setCantidad(e.target.value)}
-                            onBlur={() => setBuf(null)}
-                            className="w-12 bg-transparent text-right text-[14px] font-semibold text-[#5C3763] outline-none"
-                          />
-                          <span className="text-[14px] font-semibold text-[#5C3763]">kg</span>
-                        </label>
-                        <span className="w-[62px] text-right text-[15px] font-extrabold text-[#43302A] tabular-nums">{fmt(costoLinea)}</span>
-                        <button type="button" aria-label="Quitar subreceta" className="p-1.5 text-[16px] font-bold text-[#A93226]" onClick={quitar}>
-                          ✕
-                        </button>
+                        {escalando ? (
+                          <span className="rounded-[10px] bg-[#EDE2EE] px-2.5 py-1.5 text-[14px] font-semibold text-[#5C3763]">
+                            {fmtQty(l.cantidad * factor, 'kg')}
+                          </span>
+                        ) : (
+                          <label className="flex items-center gap-1 rounded-[10px] bg-[#EDE2EE] px-2 py-1.5">
+                            <input
+                              inputMode="decimal"
+                              value={bufVal(`linea-${i}`, String(l.cantidad))}
+                              onChange={(e) => setCantidad(e.target.value)}
+                              onBlur={() => setBuf(null)}
+                              className="w-12 bg-transparent text-right text-[14px] font-semibold text-[#5C3763] outline-none"
+                            />
+                            <span className="text-[14px] font-semibold text-[#5C3763]">kg</span>
+                          </label>
+                        )}
+                        <span className="w-[62px] text-right text-[15px] font-extrabold text-[#43302A] tabular-nums">{fmt(costoLinea * factor)}</span>
+                        {!escalando && (
+                          <button type="button" aria-label="Quitar subreceta" className="p-1.5 text-[16px] font-bold text-[#A93226]" onClick={quitar}>
+                            ✕
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
                 }
+                const sugerencia = escalando && ing ? cantidadSugerida(l.cantidad, factor, ing.escalado) : null;
                 return (
-                  <div key={i} className="flex min-h-14 items-center gap-2.5 border-b border-line px-2 py-3">
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 truncate text-left text-[15px] font-semibold"
-                      onClick={() => ing && navigate(`/ingredientes/${ing.id}`)}
-                    >
-                      {ing?.nombre ?? '—'}
-                    </button>
-                    <div className="flex flex-none items-center gap-1.5">
-                      <label className="flex items-center gap-1 rounded-[10px] bg-fill px-2 py-1.5">
-                        <input
-                          inputMode="decimal"
-                          value={bufVal(`linea-${i}`, String(l.cantidad))}
-                          onChange={(e) => setCantidad(e.target.value)}
-                          onBlur={() => setBuf(null)}
-                          className="w-12 bg-transparent text-right text-[14px] font-semibold text-ink-2 outline-none"
-                        />
-                        <span className="text-[14px] font-semibold text-ink-2">{ing ? unitShort(ing.unidadBase) : 'kg'}</span>
-                      </label>
-                      <span className="w-[62px] text-right text-[15px] font-extrabold tabular-nums">{fmt(costoLinea)}</span>
-                      <button type="button" aria-label="Quitar línea" className="p-1.5 text-[16px] font-bold text-[#A93226]" onClick={quitar}>
-                        ✕
+                  <div key={i} className="border-b border-line px-2 py-3">
+                    <div className="flex min-h-8 items-center gap-2.5">
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 truncate text-left text-[15px] font-semibold"
+                        onClick={() => ing && navigate(`/ingredientes/${ing.id}`)}
+                      >
+                        {ing?.nombre ?? '—'}
                       </button>
+                      <div className="flex flex-none items-center gap-1.5">
+                        {escalando ? (
+                          <span
+                            className="rounded-[10px] px-2.5 py-1.5 text-[14px] font-semibold"
+                            style={sugerencia != null ? { background: '#F6ECD9', color: '#96691B' } : { background: 'var(--fill)', color: 'var(--ink-2)' }}
+                          >
+                            {ing ? fmtQty(l.cantidad * factor, ing.unidadBase) : '—'}
+                          </span>
+                        ) : (
+                          <label className="flex items-center gap-1 rounded-[10px] bg-fill px-2 py-1.5">
+                            <input
+                              inputMode="decimal"
+                              value={bufVal(`linea-${i}`, String(l.cantidad))}
+                              onChange={(e) => setCantidad(e.target.value)}
+                              onBlur={() => setBuf(null)}
+                              className="w-12 bg-transparent text-right text-[14px] font-semibold text-ink-2 outline-none"
+                            />
+                            <span className="text-[14px] font-semibold text-ink-2">{ing ? unitShort(ing.unidadBase) : 'kg'}</span>
+                          </label>
+                        )}
+                        <span className="w-[62px] text-right text-[15px] font-extrabold tabular-nums">{fmt(costoLinea * factor)}</span>
+                        {!escalando && (
+                          <button type="button" aria-label="Quitar línea" className="p-1.5 text-[16px] font-bold text-[#A93226]" onClick={quitar}>
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    {sugerencia != null && ing && (
+                      <div className="mt-1.5 text-right text-[12px] font-bold" style={{ color: '#96691B' }}>
+                        Sugerido: {fmtQty(sugerencia, ing.unidadBase)} — {ing.escalado === 'leudante' ? 'los leudantes van al 75% de lo lineal' : 'la sazón sube más suave'}
+                      </div>
+                    )}
                   </div>
                 );
               })}
 
+              {!escalando && (
               <div className="mt-2.5 px-2">
                 <input
                   value={addQ}
@@ -522,6 +610,7 @@ export function EditorRecetaScreen() {
                   </div>
                 )}
               </div>
+              )}
             </div>
           </Seccion>
 
@@ -665,7 +754,12 @@ export function EditorRecetaScreen() {
       </div>
 
       {produccionAbierta && receta && (
-        <HojaProduccion receta={receta} onClose={() => setProduccionAbierta(false)} />
+        <HojaProduccion
+          receta={receta}
+          factor={factor}
+          porciones={escalando ? paraPorciones : null}
+          onClose={() => setProduccionAbierta(false)}
+        />
       )}
 
       {confirmExit && (

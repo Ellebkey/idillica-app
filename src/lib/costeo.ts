@@ -1,7 +1,7 @@
 // Motor de costos — port fiel de la clase `Component` del handoff (la
 // especificación ejecutable). Los costos SIEMPRE se derivan en vivo del
 // catálogo; nunca se guardan.
-import type { Catalogo, Ingrediente, Receta, UnidadBase } from '../api/catalogo.api';
+import type { Catalogo, Escalado, Ingrediente, Receta, UnidadBase } from '../api/catalogo.api';
 
 export type Nivel = 'verde' | 'ambar' | 'rojo' | 'gris';
 
@@ -209,6 +209,39 @@ function juntarNecesidades(idx: Indice, recetaId: string, mult: number, acc: Map
     }
   }
   visitadas.delete(recetaId);
+}
+
+// ===== Escalado de recetas =====
+
+/**
+ * Adivina cómo escala un ingrediente por su nombre (al crearlo). Leudantes y
+ * sazón no suben lineal en lotes grandes; todo lo demás es "normal".
+ */
+export function sugerirEscalado(nombre: string): Escalado {
+  const n = norm(nombre);
+  if (/polvo (para|de) hornear|bicarbonato|levadura|royal/.test(n)) {
+    return 'leudante';
+  }
+  if (/\bsal\b|pimienta|canela|nuez moscada|clavo|anis|jengibre|cardamomo|comino|especia/.test(n)) {
+    return 'sazon';
+  }
+  return 'normal';
+}
+
+/**
+ * Cantidad sugerida al escalar una línea, o null si no aplica ajuste.
+ * Guías profesionales para lotes de 2× o más: leudantes al 75% de lo lineal
+ * (el gas crece más rápido que la estructura), sazón con factor^0.7 (el sabor
+ * se concentra). Solo es SUGERENCIA: la repostera decide.
+ */
+export function cantidadSugerida(cantidad: number, factor: number, escalado: Escalado): number | null {
+  if (factor < 2 || escalado === 'normal') {
+    return null;
+  }
+  if (escalado === 'leudante') {
+    return cantidad * factor * 0.75;
+  }
+  return cantidad * Math.pow(factor, 0.7);
 }
 
 // ===== Formato (≈ fmt / fmtQty / unitWord del prototipo) =====

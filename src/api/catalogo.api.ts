@@ -4,6 +4,7 @@ import { api } from '../lib/http';
 
 export type UnidadBase = 'kg' | 'L' | 'pieza';
 export type MermaOrigen = 'referencia' | 'manual' | 'medido';
+export type Escalado = 'normal' | 'leudante' | 'sazon';
 
 export interface HistorialPrecio {
   precio: number;
@@ -31,6 +32,7 @@ export interface Ingrediente {
   existencia: number; // en unidad base
   minimo: number; // 0 = sin alerta "queda poco"
   caducaAt: string | null; // YYYY-MM-DD
+  escalado: Escalado; // cómo sube al multiplicar una receta
   productos: Producto[];
 }
 
@@ -106,6 +108,7 @@ export interface CreateIngredienteInput {
   mermaOrigen?: MermaOrigen;
   existencia?: number;
   minimo?: number;
+  escalado?: Escalado;
   productos: ProductoInput[];
 }
 
@@ -214,9 +217,15 @@ export function aplicarConteo(cocinaId: string, items: ConteoItem[]): Promise<In
   return api<Ingrediente[]>(`/cocinas/${cocinaId}/conteo`, { method: 'POST', body: { items } });
 }
 
-/** Descuenta del inventario lo que la receta necesita (incluye subrecetas) */
-export function producirReceta(recetaId: string): Promise<Ingrediente[]> {
-  return api<Ingrediente[]>(`/recetas/${recetaId}/producir`, { method: 'POST' });
+/** Descuenta del inventario lo que la receta necesita (incluye subrecetas),
+ *  multiplicado por el factor de escalado ("produje ×3"). */
+export function producirReceta(recetaId: string, factor = 1): Promise<Ingrediente[]> {
+  return api<Ingrediente[]>(`/recetas/${recetaId}/producir`, { method: 'POST', body: { factor } });
+}
+
+/** Cambia cómo escala un ingrediente al multiplicar recetas */
+export function setEscalado(ingredienteId: string, escalado: Escalado): Promise<Ingrediente> {
+  return api<Ingrediente>(`/ingredientes/${ingredienteId}`, { method: 'PUT', body: { escalado } });
 }
 
 export function crearHerramienta(cocinaId: string, input: HerramientaInput): Promise<Herramienta> {

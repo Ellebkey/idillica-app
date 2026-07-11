@@ -38,8 +38,11 @@ interface CatalogoContextValue {
   // Inventario
   registrarCompra: (ingredienteId: string, unidades: number, precio: number) => Promise<void>;
   aplicarConteo: (items: apiCat.ConteoItem[]) => Promise<void>;
-  producirReceta: (recetaId: string) => Promise<Ingrediente[]>;
+  producirReceta: (recetaId: string, factor?: number) => Promise<Ingrediente[]>;
   crearHerramienta: (input: apiCat.HerramientaInput) => Promise<Herramienta>;
+
+  // Escalado
+  setEscalado: (ingredienteId: string, escalado: apiCat.Escalado) => Promise<void>;
 }
 
 const CatalogoContext = createContext<CatalogoContextValue | null>(null);
@@ -167,10 +170,13 @@ export function CatalogoProvider({ children }: { children: ReactNode }) {
       aplicarConteo: async (items) => {
         patchIngredientes(await apiCat.aplicarConteo(cocinaId, items));
       },
-      producirReceta: async (recetaId) => {
-        const afectados = await apiCat.producirReceta(recetaId);
+      producirReceta: async (recetaId, factor = 1) => {
+        const afectados = await apiCat.producirReceta(recetaId, factor);
         patchIngredientes(afectados);
         return afectados;
+      },
+      setEscalado: async (ingredienteId, escalado) => {
+        patchIngrediente(await apiCat.setEscalado(ingredienteId, escalado));
       },
       crearHerramienta: async (input) => {
         const herramienta = await apiCat.crearHerramienta(cocinaId, input);

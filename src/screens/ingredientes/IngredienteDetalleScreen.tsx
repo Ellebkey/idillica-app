@@ -9,12 +9,18 @@ import {
 import {
   costoIngrediente, costoReceta, fmt, fmtQty, productoActivo, unitWord, usaIngrediente,
 } from '../../lib/costeo';
-import { agregarProducto as apiAgregarProducto, type ProductoInput } from '../../api/catalogo.api';
+import { agregarProducto as apiAgregarProducto, type Escalado, type ProductoInput } from '../../api/catalogo.api';
+
+const ESCALADOS: { valor: Escalado; label: string; ayuda: string }[] = [
+  { valor: 'normal', label: 'Normal', ayuda: 'Sube lineal: el doble de receta, el doble de este ingrediente.' },
+  { valor: 'leudante', label: 'Leudante', ayuda: 'En lotes grandes la app sugerirá el 75% de lo lineal — el gas crece más rápido que la estructura.' },
+  { valor: 'sazon', label: 'Sal o especia', ayuda: 'En lotes grandes la app sugerirá subirlo más suave: el sabor se concentra.' },
+];
 
 export function IngredienteDetalleScreen() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
-  const { catalogo, idx, activarProducto, reload } = useCatalogo();
+  const { catalogo, idx, activarProducto, setEscalado, reload } = useCatalogo();
   const [sheet, setSheet] = useState(false);
   const [verTodos, setVerTodos] = useState(false);
   const [agregando, setAgregando] = useState(false);
@@ -186,6 +192,31 @@ export function IngredienteDetalleScreen() {
             <Button sm variant="outline" onClick={() => navigate(`/ingredientes/${ing.id}/merma`)}>
               Medir merma
             </Button>
+          </Card>
+        </section>
+
+        <section>
+          <h2 className="mb-2 text-[15px] font-extrabold">
+            Al escalar recetas <span className="font-semibold text-ink-3">· solo sugiere, tú decides</span>
+          </h2>
+          <Card className="p-4">
+            <div className="flex rounded-[14px] bg-fill p-1">
+              {ESCALADOS.map((e) => (
+                <button
+                  key={e.valor}
+                  type="button"
+                  onClick={() => void setEscalado(ing.id, e.valor)}
+                  className={`flex-1 rounded-[11px] py-2.5 text-[13.5px] font-bold ${
+                    ing.escalado === e.valor ? 'bg-card text-ink shadow-sm' : 'text-ink-3'
+                  }`}
+                >
+                  {e.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2.5 text-[12.5px] leading-normal text-ink-3">
+              {(ESCALADOS.find((e) => e.valor === ing.escalado) ?? ESCALADOS[0]).ayuda}
+            </p>
           </Card>
         </section>
 

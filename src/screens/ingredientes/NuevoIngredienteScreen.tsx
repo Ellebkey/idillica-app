@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCatalogo } from '../../state/CatalogoContext';
 import { HeaderDetalle } from '../../components';
-import { fmt, unitShort, unitWord } from '../../lib/costeo';
+import { fmt, sugerirEscalado, unitShort, unitWord } from '../../lib/costeo';
 import type { UnidadBase } from '../../api/catalogo.api';
 
 const inputClass =
@@ -66,6 +66,7 @@ export function NuevoIngredienteScreen() {
         mermaOrigen: mermaNum > 0 ? 'manual' : 'referencia',
         existencia: num(existencia),
         minimo: num(minimo),
+        escalado: sugerirEscalado(nombre),
         productos: [{
           marca: marca.trim() || 'Sin marca',
           presentacion: presentacion.trim() || `${cantidadNum} ${unitShort(unidad)}`,
