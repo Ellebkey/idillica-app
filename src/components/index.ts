@@ -6,6 +6,9 @@ export { Icon, type IconType } from './Icon';
 export { Skeleton } from './Skeleton';
 export { TabBar } from './TabBar';
 export { HojaNuevoPrecio } from './HojaNuevoPrecio';
+export { HojaRegistrarCompra } from './HojaRegistrarCompra';
+export { HojaNuevaHerramienta } from './HojaNuevaHerramienta';
+export { HojaProduccion } from './HojaProduccion';
 export {
   BadgeMerma,
   Buscador,

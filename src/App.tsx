@@ -13,6 +13,9 @@ import { IngredienteDetalleScreen } from './screens/ingredientes/IngredienteDeta
 import { NuevoIngredienteScreen } from './screens/ingredientes/NuevoIngredienteScreen';
 import { WizardMermaScreen } from './screens/ingredientes/WizardMermaScreen';
 import { PantallaImpactoScreen } from './screens/impacto/PantallaImpactoScreen';
+import { InventarioScreen } from './screens/inventario/InventarioScreen';
+import { ListaComprasScreen } from './screens/inventario/ListaComprasScreen';
+import { WizardConteoScreen } from './screens/inventario/WizardConteoScreen';
 import { AjustesScreen } from './screens/ajustes/AjustesScreen';
 
 export function App() {
@@ -32,6 +35,7 @@ export function App() {
                       <Route path="/" element={<InicioScreen />} />
                       <Route path="/recetas" element={<RecetasScreen />} />
                       <Route path="/ingredientes" element={<IngredientesScreen />} />
+                      <Route path="/inventario" element={<InventarioScreen />} />
                       <Route path="/ajustes" element={<AjustesScreen />} />
                     </Route>
 
@@ -41,6 +45,8 @@ export function App() {
                     <Route path="/ingredientes/nuevo" element={<NuevoIngredienteScreen />} />
                     <Route path="/ingredientes/:id" element={<IngredienteDetalleScreen />} />
                     <Route path="/ingredientes/:id/merma" element={<WizardMermaScreen />} />
+                    <Route path="/inventario/compras" element={<ListaComprasScreen />} />
+                    <Route path="/inventario/conteo" element={<WizardConteoScreen />} />
                     <Route path="/impacto" element={<PantallaImpactoScreen />} />
 
                     <Route path="*" element={<Navigate to="/" replace />} />

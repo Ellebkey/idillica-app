@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCatalogo } from '../../state/CatalogoContext';
 import {
-  Button, DonaCosto, EstadoVacio, Field, HeaderDetalle, ModalSalirSinGuardar, Skeleton, Stepper, ToggleUnidad,
+  Button, DonaCosto, EstadoVacio, Field, HeaderDetalle, HojaProduccion, ModalSalirSinGuardar, Skeleton, Stepper, ToggleUnidad,
 } from '../../components';
 import {
   SEM, costoIngrediente, costoReceta, fmt, fmtQty, nivel, norm, tasaOperacion,
@@ -80,6 +80,7 @@ export function EditorRecetaScreen() {
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
   const [rendEnGr, setRendEnGr] = useState(false);
   const [addQ, setAddQ] = useState('');
+  const [produccionAbierta, setProduccionAbierta] = useState(false);
   const [open, setOpen] = useState({ datos: true, ing: true, costo: true, ganancia: true, elab: false, alerg: false, fotos: false });
 
   // Inicializa el borrador cuando llega el catálogo
@@ -522,12 +523,30 @@ export function EditorRecetaScreen() {
           </Seccion>
 
           {!esNueva && (
-            <Button block variant="outline" onClick={() => navigate(`/recetas/${id}/ficha`)}>
-              Ver ficha técnica (PDF)
-            </Button>
+            <>
+              <Button
+                block
+                variant="salvia"
+                className="h-[54px]"
+                disabled={dirty}
+                onClick={() => setProduccionAbierta(true)}
+              >
+                Produje esta receta
+              </Button>
+              {dirty && (
+                <p className="text-center text-[12.5px] text-ink-3">Guarda tus cambios para descontar del inventario.</p>
+              )}
+              <Button block variant="outline" onClick={() => navigate(`/recetas/${id}/ficha`)}>
+                Ver ficha técnica (PDF)
+              </Button>
+            </>
           )}
         </div>
       </div>
+
+      {produccionAbierta && receta && (
+        <HojaProduccion receta={receta} onClose={() => setProduccionAbierta(false)} />
+      )}
 
       {confirmExit && (
         <ModalSalirSinGuardar

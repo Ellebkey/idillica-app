@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { listCocinas } from '../api/cocinas.api';
 import * as apiCat from '../api/catalogo.api';
-import type { Catalogo, Ingrediente, Receta, CocinaCatalogo } from '../api/catalogo.api';
+import type { Catalogo, Herramienta, Ingrediente, Receta, CocinaCatalogo } from '../api/catalogo.api';
 import { indexar, type Indice } from '../lib/costeo';
 
 /** Alimenta la PantallaImpacto: antes = recalcular con precioViejo */
@@ -34,6 +34,12 @@ interface CatalogoContextValue {
   guardarReceta: (recetaId: string, input: apiCat.SaveRecetaInput) => Promise<Receta>;
   eliminarReceta: (recetaId: string) => Promise<void>;
   actualizarCocina: (input: apiCat.UpdateCocinaInput) => Promise<void>;
+
+  // Inventario
+  registrarCompra: (ingredienteId: string, unidades: number, precio: number) => Promise<void>;
+  aplicarConteo: (items: apiCat.ConteoItem[]) => Promise<void>;
+  producirReceta: (recetaId: string) => Promise<Ingrediente[]>;
+  crearHerramienta: (input: apiCat.HerramientaInput) => Promise<Herramienta>;
 }
 
 const CatalogoContext = createContext<CatalogoContextValue | null>(null);
@@ -75,6 +81,17 @@ export function CatalogoProvider({ children }: { children: ReactNode }) {
         ? prev.ingredientes.map((i) => (i.id === actualizado.id ? actualizado : i))
         : [...prev.ingredientes, actualizado].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
       return { ...prev, ingredientes };
+    });
+  }, []);
+
+  const patchIngredientes = useCallback((actualizados: Ingrediente[]) => {
+    setCatalogo((prev) => {
+      if (!prev) return prev;
+      const porId = new Map(actualizados.map((i) => [i.id, i]));
+      return {
+        ...prev,
+        ingredientes: prev.ingredientes.map((i) => porId.get(i.id) ?? i),
+      };
     });
   }, []);
 
@@ -143,8 +160,32 @@ export function CatalogoProvider({ children }: { children: ReactNode }) {
       actualizarCocina: async (input) => {
         patchCocina(await apiCat.actualizarCocina(cocinaId, input));
       },
+
+      registrarCompra: async (ingredienteId, unidades, precio) => {
+        patchIngrediente(await apiCat.registrarCompra(ingredienteId, unidades, precio));
+      },
+      aplicarConteo: async (items) => {
+        patchIngredientes(await apiCat.aplicarConteo(cocinaId, items));
+      },
+      producirReceta: async (recetaId) => {
+        const afectados = await apiCat.producirReceta(recetaId);
+        patchIngredientes(afectados);
+        return afectados;
+      },
+      crearHerramienta: async (input) => {
+        const herramienta = await apiCat.crearHerramienta(cocinaId, input);
+        setCatalogo((prev) =>
+          prev
+            ? {
+                ...prev,
+                herramientas: [...prev.herramientas, herramienta].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
+              }
+            : prev,
+        );
+        return herramienta;
+      },
     }),
-    [catalogo, loading, error, reload, ultimoImpacto, cocinaId, patchIngrediente, patchReceta, patchCocina],
+    [catalogo, loading, error, reload, ultimoImpacto, cocinaId, patchIngrediente, patchIngredientes, patchReceta, patchCocina],
   );
 
   return <CatalogoContext.Provider value={value}>{children}</CatalogoContext.Provider>;

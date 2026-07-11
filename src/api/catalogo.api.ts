@@ -28,7 +28,17 @@ export interface Ingrediente {
   nombre: string;
   unidadBase: UnidadBase;
   merma: { pct: number; origen: MermaOrigen };
+  existencia: number; // en unidad base
+  minimo: number; // 0 = sin alerta "queda poco"
+  caducaAt: string | null; // YYYY-MM-DD
   productos: Producto[];
+}
+
+export interface Herramienta {
+  id: string;
+  nombre: string;
+  detalle: string;
+  estado: string;
 }
 
 export interface Linea {
@@ -74,6 +84,7 @@ export interface Catalogo {
   cocina: CocinaCatalogo;
   ingredientes: Ingrediente[];
   recetas: Receta[];
+  herramientas: Herramienta[];
   categorias: string[];
   alergenos: string[];
 }
@@ -93,7 +104,20 @@ export interface CreateIngredienteInput {
   unidadBase: UnidadBase;
   mermaPct?: number;
   mermaOrigen?: MermaOrigen;
+  existencia?: number;
+  minimo?: number;
   productos: ProductoInput[];
+}
+
+export interface ConteoItem {
+  ingredienteId: string;
+  cantidad: number;
+}
+
+export interface HerramientaInput {
+  nombre: string;
+  detalle?: string;
+  estado?: string;
 }
 
 export interface LineaInput {
@@ -176,4 +200,25 @@ export function eliminarReceta(recetaId: string): Promise<void> {
 
 export function actualizarCocina(cocinaId: string, input: UpdateCocinaInput): Promise<CocinaCatalogo> {
   return api<CocinaCatalogo>(`/cocinas/${cocinaId}`, { method: 'PUT', body: input });
+}
+
+// ===== Inventario =====
+
+/** Suma unidades × contenido a la existencia; si el precio cambió, lo registra */
+export function registrarCompra(ingredienteId: string, unidades: number, precio: number): Promise<Ingrediente> {
+  return api<Ingrediente>(`/ingredientes/${ingredienteId}/compra`, { method: 'POST', body: { unidades, precio } });
+}
+
+/** Conteo físico: fija la existencia de varios ingredientes de golpe */
+export function aplicarConteo(cocinaId: string, items: ConteoItem[]): Promise<Ingrediente[]> {
+  return api<Ingrediente[]>(`/cocinas/${cocinaId}/conteo`, { method: 'POST', body: { items } });
+}
+
+/** Descuenta del inventario lo que la receta necesita (incluye subrecetas) */
+export function producirReceta(recetaId: string): Promise<Ingrediente[]> {
+  return api<Ingrediente[]>(`/recetas/${recetaId}/producir`, { method: 'POST' });
+}
+
+export function crearHerramienta(cocinaId: string, input: HerramientaInput): Promise<Herramienta> {
+  return api<Herramienta>(`/cocinas/${cocinaId}/herramientas`, { method: 'POST', body: input });
 }

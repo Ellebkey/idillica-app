@@ -7,17 +7,19 @@ import { useAuth } from '../../auth/AuthContext';
 import { useCatalogo } from '../../state/CatalogoContext';
 import { Buscador, Card, EstadoVacio, Icon, Skeleton, Button } from '../../components';
 import {
-  SEM, costoIngrediente, costoReceta, diasDesdePrecio, fmt, foodCostPct, nivel, norm, unitWord,
+  SEM, costoIngrediente, costoReceta, diasCaducidad, diasDesdePrecio, fmt, fmtQty, foodCostPct, nivel, norm,
+  quedaPoco, unitWord,
   type Nivel,
 } from '../../lib/costeo';
 
 interface Atencion {
-  tipo: 'receta' | 'ingrediente';
   id: string;
+  to: string;
   nombre: string;
   motivo: string;
   pill: string;
   nivel: Nivel;
+  orden: number; // rojo 0 · caduca≤7 0.5 · ámbar 1 · caduca≤30 1.5 · queda poco 1.6 · precio viejo 2
 }
 
 export function InicioScreen() {
@@ -54,42 +56,57 @@ export function InicioScreen() {
       const n = nivel(pct, objetivo);
       if (n === 'rojo' && pct != null) {
         const total = costoReceta(idx, receta.id);
-        // ¿Una línea domina el costo (>60%)? — el motivo más accionable
-        let motivo = `Food cost arriba de ${Math.round(pct)}%, muy por encima de tu objetivo de ${Math.round(objetivo)}%.`;
+        // ¿Una subreceta domina el costo (>60%)? — el motivo más accionable
+        let motivo = `Food cost arriba de ${Math.round(objetivo + 10)}%, revisa precio o porciones`;
         for (const linea of receta.lineas) {
           if (linea.recetaId) {
             const sub = idx.recetas.get(linea.recetaId);
             if (sub && sub.rendimientoKg > 0) {
               const costoLinea = (linea.cantidad / sub.rendimientoKg) * costoReceta(idx, linea.recetaId);
               if (total > 0 && costoLinea / total > 0.6) {
-                motivo = `La subreceta ${sub.nombre} es el ${Math.round((costoLinea / total) * 100)}% del costo.`;
+                motivo = `La subreceta ${sub.nombre} es el ${Math.round((costoLinea / total) * 100)}% del costo`;
               }
             }
           }
         }
-        items.push({ tipo: 'receta', id: receta.id, nombre: receta.nombre, motivo, pill: `${Math.round(pct)}%`, nivel: 'rojo' });
+        items.push({ id: receta.id, to: `/recetas/${receta.id}`, nombre: receta.nombre, motivo, pill: `${Math.round(pct)}%`, nivel: 'rojo', orden: 0 });
       } else if (n === 'ambar' && pct != null) {
         items.push({
-          tipo: 'receta', id: receta.id, nombre: receta.nombre,
-          motivo: `Food cost ${Math.round(pct)}%, cerca de tu límite de ${Math.round(objetivo)}%.`,
-          pill: `${Math.round(pct)}%`, nivel: 'ambar',
+          id: receta.id, to: `/recetas/${receta.id}`, nombre: receta.nombre,
+          motivo: `Food cost ${Math.round(pct)}%, cerca de tu límite de ${Math.round(objetivo)}%`,
+          pill: `${Math.round(pct)}%`, nivel: 'ambar', orden: 1,
         });
       }
     }
 
     for (const ing of catalogo.ingredientes) {
+      const caduca = diasCaducidad(ing);
+      if (caduca != null && caduca <= 30) {
+        const d = Math.max(0, caduca);
+        items.push({
+          id: `caduca-${ing.id}`, to: '/inventario', nombre: ing.nombre,
+          motivo: `Está por caducar: quedan ${d} ${d === 1 ? 'día' : 'días'}`,
+          pill: 'Caduca pronto', nivel: caduca <= 7 ? 'rojo' : 'ambar', orden: caduca <= 7 ? 0.5 : 1.5,
+        });
+      }
+      if (quedaPoco(ing)) {
+        items.push({
+          id: `poco-${ing.id}`, to: '/inventario', nombre: ing.nombre,
+          motivo: `Quedan ${fmtQty(ing.existencia, ing.unidadBase)} y tu mínimo es ${fmtQty(ing.minimo, ing.unidadBase)}`,
+          pill: 'Queda poco', nivel: 'ambar', orden: 1.6,
+        });
+      }
       const dias = diasDesdePrecio(ing);
       if (dias > 60) {
-        const meses = Math.floor(dias / 30);
         items.push({
-          tipo: 'ingrediente', id: ing.id, nombre: ing.nombre,
-          motivo: `Su precio tiene ${meses >= 2 ? `${meses} meses` : `${dias} días`} sin actualizarse.`,
-          pill: 'Precio viejo', nivel: 'ambar',
+          id: `viejo-${ing.id}`, to: `/ingredientes/${ing.id}`, nombre: ing.nombre,
+          motivo: `Su precio tiene ${dias >= 90 ? `${Math.round(dias / 30)} meses` : `${dias} días`} sin actualizarse`,
+          pill: 'Precio viejo', nivel: 'ambar', orden: 2,
         });
       }
     }
 
-    return items.sort((a, b) => (a.nivel === 'rojo' ? -1 : 1) - (b.nivel === 'rojo' ? -1 : 1));
+    return items.sort((a, b) => a.orden - b.orden);
   }, [catalogo, idx, objetivo]);
 
   const resultados = useMemo(() => {
@@ -200,10 +217,10 @@ export function InicioScreen() {
                 <div className="space-y-2.5">
                   {atencion.map((a) => (
                     <Card
-                      key={`${a.tipo}-${a.id}`}
+                      key={a.id}
                       className="flex cursor-pointer items-center gap-3 px-4 py-3.5"
                       style={{ borderLeft: `5px solid ${SEM[a.nivel].dot}` }}
-                      onClick={() => navigate(a.tipo === 'receta' ? `/recetas/${a.id}` : `/ingredientes/${a.id}`)}
+                      onClick={() => navigate(a.to)}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[15.5px] font-bold">{a.nombre}</div>

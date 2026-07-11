@@ -154,6 +154,63 @@ export function diasDesdePrecio(ing: Ingrediente): number {
   return Math.floor((Date.now() - new Date(prod.precioActualizadoAt).getTime()) / 86400000);
 }
 
+// ===== Inventario =====
+
+/**
+ * ≈ rawCost(): precio del producto activo / cantidad, SIN merma — lo que vale
+ * lo que guardas en la alacena (la merma solo encarece lo que usas al cocinar).
+ */
+export function costoCrudo(ing: Ingrediente): number {
+  const prod = productoActivo(ing);
+  if (!prod || prod.cantidad <= 0) {
+    return 0;
+  }
+  return prod.precio / prod.cantidad;
+}
+
+/** ≈ lowStock(), adaptado a prod: solo alerta cuando hay mínimo configurado */
+export function quedaPoco(ing: Ingrediente): boolean {
+  return ing.minimo > 0 && ing.existencia <= ing.minimo;
+}
+
+/** Días para caducar (negativo = ya caducó); null si no tiene fecha */
+export function diasCaducidad(ing: Ingrediente): number | null {
+  if (!ing.caducaAt) {
+    return null;
+  }
+  return Math.ceil((new Date(ing.caducaAt).getTime() - Date.now()) / 86400000);
+}
+
+/**
+ * ≈ gatherNeeds(): cuánto descuenta del inventario producir la receta UNA vez,
+ * recursivo en subrecetas (ingredienteId → cantidad en unidad base). Espejo de
+ * GatherNeeds del backend Go.
+ */
+export function necesidadesReceta(idx: Indice, recetaId: string): Map<string, number> {
+  const acc = new Map<string, number>();
+  juntarNecesidades(idx, recetaId, 1, acc, new Set());
+  return acc;
+}
+
+function juntarNecesidades(idx: Indice, recetaId: string, mult: number, acc: Map<string, number>, visitadas: Set<string>) {
+  const receta = idx.recetas.get(recetaId);
+  if (!receta || visitadas.has(recetaId)) {
+    return;
+  }
+  visitadas.add(recetaId);
+  for (const linea of receta.lineas) {
+    if (linea.ingredienteId) {
+      acc.set(linea.ingredienteId, (acc.get(linea.ingredienteId) ?? 0) + linea.cantidad * mult);
+    } else if (linea.recetaId) {
+      const sub = idx.recetas.get(linea.recetaId);
+      if (sub && sub.rendimientoKg > 0) {
+        juntarNecesidades(idx, linea.recetaId, mult * (linea.cantidad / sub.rendimientoKg), acc, visitadas);
+      }
+    }
+  }
+  visitadas.delete(recetaId);
+}
+
 // ===== Formato (≈ fmt / fmtQty / unitWord del prototipo) =====
 
 export function fmt(n: number): string {
@@ -176,6 +233,11 @@ export function fmtQty(q: number, u: UnidadBase): string {
 
 export function unitWord(u: UnidadBase): string {
   return u === 'pieza' ? 'pieza' : u === 'L' ? 'litro' : 'kilo';
+}
+
+/** ≈ unitShort(): la abreviatura que acompaña a los inputs numéricos */
+export function unitShort(u: UnidadBase): string {
+  return u === 'pieza' ? 'pza' : u;
 }
 
 /** Normalización de acentos para búsquedas (≈ norm del prototipo) */

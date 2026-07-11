@@ -1,9 +1,10 @@
-// Tab bar del handoff: 88px, translúcida con blur, visible SOLO en las 4
+// Tab bar del handoff: 88px, translúcida con blur, visible SOLO en las 5
 // pantallas raíz. Activo burgundy, inactivo topo (variables por tema).
 import { NavLink } from 'react-router-dom';
 import {
   AdjustmentsHorizontalIcon,
   BookOpenIcon,
+  CubeIcon,
   HomeIcon,
   ShoppingBagIcon,
 } from '@heroicons/react/24/outline';
@@ -20,6 +21,7 @@ const TABS: TabItem[] = [
   { to: '/', label: 'Inicio', icon: HomeIcon, end: true },
   { to: '/recetas', label: 'Recetas', icon: BookOpenIcon },
   { to: '/ingredientes', label: 'Ingredientes', icon: ShoppingBagIcon },
+  { to: '/inventario', label: 'Inventario', icon: CubeIcon },
   { to: '/ajustes', label: 'Ajustes', icon: AdjustmentsHorizontalIcon },
 ];
 
