@@ -331,6 +331,7 @@ export function EditorRecetaScreen() {
                       sub ? 'border-[#E3D3E5] bg-[#F6EFF7]' : 'border-line bg-card'
                     }`}
                   >
+                    {/* Renglón 1: nombre (todo el ancho que sobre) + costo + quitar */}
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
@@ -339,29 +340,34 @@ export function EditorRecetaScreen() {
                       >
                         {sub ? `◆ ${sub.nombre}` : ing?.nombre ?? '—'}
                       </button>
+                      <span className="flex-none text-[15px] font-extrabold tabular-nums">{fmt(costoLinea)}</span>
+                      <button
+                        type="button"
+                        aria-label="Quitar línea"
+                        className="grid h-9 w-9 flex-none place-items-center text-[15px] font-bold text-ink-3"
+                        onClick={() => mutate({ lineas: draft.lineas.filter((_, xi) => xi !== i) })}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {/* Renglón 2: cantidad + unidad, con la lectura amable a la derecha */}
+                    <div className="mt-2 flex items-center gap-2">
                       <input
                         inputMode="decimal"
-                        className="w-20 flex-none rounded-lg bg-fill px-2 py-1.5 text-center text-[13.5px] font-bold outline-none"
+                        className="h-10 w-24 flex-none rounded-xl bg-fill px-2 text-center text-[14px] font-bold outline-none"
                         value={String(l.cantidad)}
                         onChange={(e) => {
                           const v = parseFloat(e.target.value.replace(/[^0-9.]/g, '')) || 0;
                           mutate({ lineas: draft.lineas.map((x, xi) => (xi === i ? { ...x, cantidad: v } : x)) });
                         }}
                       />
-                      <span className="w-8 flex-none text-[12px] text-ink-3">
+                      <span className="flex-none text-[13px] font-bold text-ink-3">
                         {ing ? (ing.unidadBase === 'pieza' ? 'pza' : ing.unidadBase) : 'kg'}
                       </span>
-                      <span className="flex-none text-[15px] font-extrabold tabular-nums">{fmt(costoLinea)}</span>
-                      <button
-                        type="button"
-                        aria-label="Quitar línea"
-                        className="flex-none px-1 text-[15px] font-bold text-ink-3"
-                        onClick={() => mutate({ lineas: draft.lineas.filter((_, xi) => xi !== i) })}
-                      >
-                        ✕
-                      </button>
+                      {ing && (
+                        <span className="ml-auto text-[12.5px] text-ink-3">{fmtQty(l.cantidad, ing.unidadBase)}</span>
+                      )}
                     </div>
-                    {ing && <div className="mt-0.5 text-[12px] text-ink-3">{fmtQty(l.cantidad, ing.unidadBase)}</div>}
                     {sub && dominante && (
                       <div className="mt-1 text-[12.5px] font-bold text-rojo-600">
                         {Math.round((costoLinea / costo) * 100)}% del costo de esta receta

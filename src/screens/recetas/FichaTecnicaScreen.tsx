@@ -47,7 +47,8 @@ export function FichaTecnicaScreen() {
   const fecha = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
   return (
-    <div className="flex h-full flex-col" style={{ background: '#E8E1CF' }}>
+    // tema-claro: la ficha es papel — se queda en claro aunque la app esté en dark
+    <div className="tema-claro flex h-full flex-col" style={{ background: '#E8E1CF' }}>
       <div className="print:hidden">
         <HeaderDetalle
           titulo="Ficha técnica"

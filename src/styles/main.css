@@ -46,6 +46,20 @@
   --tab-bg: rgba(32, 24, 19, 0.96);
 }
 
+/* Pantallas ancladas al tema CLARO aunque la app esté en oscuro
+   (la ficha técnica es papel: el handoff pide que no cambie en dark).
+   Redefine las variables para el subárbol y re-evalúa el color heredado. */
+.tema-claro {
+  --surface: var(--crema-50);
+  --card: var(--crema-100);
+  --fill: var(--crema-200);
+  --line: var(--crema-300);
+  --ink: var(--choco-700);
+  --ink-2: var(--choco-400);
+  --ink-3: var(--choco-300);
+  color: var(--ink);
+}
+
 /* Paleta cerrada: solo tokens del handoff */
 @theme {
   --color-*: initial;
