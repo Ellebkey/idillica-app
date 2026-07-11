@@ -1,11 +1,11 @@
 // Componentes de costeo del handoff (nombres del README de diseño).
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { cn } from '../lib/cn';
 import { Icon } from './Icon';
 import { Button } from './Button';
-import { DONA_COLORES, MB, SEM, fmt, type Nivel } from '../lib/costeo';
+import { DONA_COLORES, MB, SEM, type Nivel } from '../lib/costeo';
 import type { MermaOrigen } from '../api/catalogo.api';
 
 /** Pill de semáforo con el food cost ("54%" sobre pastel del nivel) */
@@ -40,14 +40,14 @@ export function PuntoViejo() {
   return <span className="inline-block h-[9px] w-[9px] flex-none rounded-full bg-ambar-600" aria-label="Precio viejo" />;
 }
 
-/** Chip de categoría (Todas activa = choco sólido) */
+/** Chip de categoría (activa = choco sólido) */
 export function ChipCategoria({ activa, children, onClick }: { activa: boolean; children: ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'h-11 flex-none rounded-full border-[1.5px] px-4 text-[14px] font-bold whitespace-nowrap',
+        'h-10 flex-none rounded-full border-[1.5px] px-4 text-[14px] font-semibold whitespace-nowrap',
         activa ? 'border-choco-700 bg-choco-700 text-crema-100' : 'border-line bg-card text-ink-2',
       )}
     >
@@ -102,7 +102,7 @@ export function Stepper({ valor, onChange }: { valor: number; onChange: (n: numb
 /** Buscador 52px con lupa */
 export function Buscador({ valor, onChange, placeholder }: { valor: string; onChange: (v: string) => void; placeholder: string }) {
   return (
-    <label className="flex h-[52px] w-full items-center gap-2.5 rounded-2xl border-[1.5px] border-line bg-card px-4">
+    <label className="flex h-[52px] w-full items-center gap-2.5 rounded-[18px] border-[1.5px] border-line bg-card px-4">
       <Icon icon={MagnifyingGlassIcon} className="h-5 w-5 flex-none text-ink-3" />
       <input
         value={valor}
@@ -146,24 +146,25 @@ export function DonaCosto({
     .join(', ');
 
   return (
-    <div className="flex items-center gap-5">
+    <div className="flex items-center gap-[18px]">
       <div
         className="grid flex-none place-items-center rounded-full"
         style={{ width: size, height: size, background: `conic-gradient(${stops})` }}
       >
         <div
-          className="grid place-items-center rounded-full bg-card text-center"
+          className="flex flex-col items-center justify-center rounded-full bg-card"
           style={{ width: size - 44, height: size - 44 }}
         >
-          <span className="text-[13.5px] font-extrabold leading-tight">{fmt(total)}</span>
+          <span className="text-[16px] font-extrabold leading-tight">${Math.round(total)}</span>
+          <span className="text-[10px] text-ink-2">total</span>
         </div>
       </div>
-      <div className="min-w-0 flex-1 space-y-1.5">
+      <div className="min-w-0 flex-1 space-y-[7px]">
         {segmentos.map((s, i) => (
           <div key={s.nombre} className="flex items-center gap-2 text-[13px]">
-            <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: DONA_COLORES[i % DONA_COLORES.length] }} />
-            <span className="min-w-0 flex-1 truncate text-ink-2">{s.nombre}</span>
-            <span className="font-bold tabular-nums">{Math.round((s.valor / total) * 100)}%</span>
+            <span className="h-2.5 w-2.5 flex-none rounded-[3px]" style={{ background: DONA_COLORES[i % DONA_COLORES.length] }} />
+            <span className="min-w-0 flex-1 truncate font-semibold">{s.nombre}</span>
+            <span className="font-extrabold tabular-nums">{Math.round((s.valor / total) * 100)}%</span>
           </div>
         ))}
       </div>
@@ -197,15 +198,15 @@ export function HeaderDetalle({
 }) {
   const navigate = useNavigate();
   return (
-    <header className="flex-none px-5 pt-4 pb-3">
+    <header className="flex-none px-3 pt-2 pb-2">
       <div className="flex items-center gap-2">
         <button
           type="button"
           aria-label="Regresar"
           onClick={onBack ?? (() => navigate(-1))}
-          className="grid h-12 w-12 flex-none place-items-center rounded-2xl border-[1.5px] border-line bg-card"
+          className="grid h-12 w-12 flex-none place-items-center text-[26px] leading-none text-ink"
         >
-          <Icon icon={ChevronLeftIcon} className="h-5 w-5" />
+          ‹
         </button>
         <div className="min-w-0 flex-1 text-[19px] font-extrabold tracking-[-0.3px]">{titulo}</div>
         {right}

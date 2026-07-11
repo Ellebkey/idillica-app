@@ -1,14 +1,14 @@
 // Editor de receta — la pantalla más compleja del handoff: BarraCostoSticky
-// en vivo, secciones colapsables, autocomplete de ingredientes, DonaCosto,
-// Ganancia real (con gastos de operación) y modal de salida sin guardar.
+// de tres columnas, secciones colapsables con conteo, líneas compactas con la
+// cantidad como pill editable, ganancia real y "Produje esta receta".
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCatalogo } from '../../state/CatalogoContext';
 import {
-  Button, DonaCosto, EstadoVacio, Field, HeaderDetalle, HojaProduccion, ModalSalirSinGuardar, Skeleton, Stepper, ToggleUnidad,
+  Button, DonaCosto, EstadoVacio, HeaderDetalle, HojaProduccion, ModalSalirSinGuardar, Skeleton,
 } from '../../components';
 import {
-  SEM, costoIngrediente, costoReceta, fmt, fmtQty, nivel, norm, tasaOperacion,
+  SEM, costoIngrediente, costoReceta, fmt, nivel, norm, tasaOperacion, unitShort,
 } from '../../lib/costeo';
 import type { Receta, SaveRecetaInput } from '../../api/catalogo.api';
 
@@ -48,16 +48,29 @@ function draftDe(receta: Receta | null, categoriaDefault: string): Draft {
   };
 }
 
-function Seccion({ titulo, abierta, onToggle, children }: {
-  titulo: string; abierta: boolean; onToggle: () => void; children: React.ReactNode;
+// Estilos de campo del editor (h 50, radio 14, fondo surface — como el handoff)
+const inputClass =
+  'h-[50px] w-full rounded-[14px] border-[1.5px] border-line bg-surface px-3.5 text-[15.5px] outline-none placeholder:text-ink-3 focus:border-burgundy-600';
+const inputNumClass =
+  'h-[50px] w-full min-w-0 rounded-[14px] border-[1.5px] border-line bg-surface text-center text-[16px] font-bold tabular-nums outline-none placeholder:text-ink-3 focus:border-burgundy-600';
+
+function Etiqueta({ children }: { children: React.ReactNode }) {
+  return <div className="mb-1.5 text-[13px] font-semibold text-ink-2">{children}</div>;
+}
+
+function Seccion({ titulo, cuenta, abierta, onToggle, children }: {
+  titulo: string; cuenta?: string | number; abierta: boolean; onToggle: () => void; children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[20px] border-[1.5px] border-line bg-card shadow-[0_2px_8px_rgba(94,26,25,0.05)]">
-      <button type="button" onClick={onToggle} className="flex h-14 w-full items-center justify-between px-4">
-        <span className="text-[15.5px] font-extrabold">{titulo}</span>
-        <span className="text-[20px] font-bold text-ink-3">{abierta ? '−' : '+'}</span>
+    <div className="overflow-hidden rounded-[20px] border-[1.5px] border-line bg-card">
+      <button type="button" onClick={onToggle} className="flex min-h-14 w-full items-center justify-between px-[18px] py-4">
+        <span className="text-[16px] font-bold">
+          {titulo}
+          {cuenta != null && <span className="font-semibold text-ink-3"> · {cuenta}</span>}
+        </span>
+        <span className="text-[20px] font-semibold text-ink-3">{abierta ? '−' : '+'}</span>
       </button>
-      {abierta && <div className="border-t-[1.5px] border-line px-4 py-4">{children}</div>}
+      {abierta && children}
     </div>
   );
 }
@@ -81,11 +94,19 @@ export function EditorRecetaScreen() {
   const [rendEnGr, setRendEnGr] = useState(false);
   const [addQ, setAddQ] = useState('');
   const [produccionAbierta, setProduccionAbierta] = useState(false);
-  const [open, setOpen] = useState({ datos: true, ing: true, costo: true, ganancia: true, elab: false, alerg: false, fotos: false });
+  const [open, setOpen] = useState({ datos: true, ing: true, costo: true, elab: false, alerg: false, fotos: false });
+  // Buffer del input numérico enfocado: conserva estados intermedios ("0.")
+  // que parseFloat colapsaría y el re-render se comería.
+  const [buf, setBuf] = useState<{ k: string; v: string } | null>(null);
+  const bufVal = (k: string, fallback: string) => (buf?.k === k ? buf.v : fallback);
 
   // Inicializa el borrador cuando llega el catálogo
   if (catalogo && draft === null && (esNueva || receta)) {
     setDraft(draftDe(receta, catalogo.categorias[0] ?? 'Pasteles'));
+    // El handoff arranca en gramos cuando el rendimiento es menor a 1 kg
+    if (receta && receta.rendimientoKg > 0 && receta.rendimientoKg < 1) {
+      setRendEnGr(true);
+    }
   }
 
   const objetivo = (catalogo?.cocina.foodCostObjetivo ?? 0.3) * 100;
@@ -127,7 +148,7 @@ export function EditorRecetaScreen() {
     : draft.porciones > 0 ? costo / draft.porciones : 0;
 
   const costoReal = costo * (1 + tasa);
-  const ganancia = draft.precioVenta != null ? (draft.precioVenta - costoReal) / (draft.porciones || 1) : null;
+  const ganancia = draft.precioVenta != null ? (draft.precioVenta - costoReal) / (draft.esSubreceta ? 1 : Math.max(1, draft.porciones)) : null;
 
   const partesDona = draft.lineas
     .map((l) => {
@@ -149,7 +170,7 @@ export function EditorRecetaScreen() {
     ? [
         ...catalogo.ingredientes
           .filter((i) => !usadosIng.has(i.id) && norm(i.nombre).includes(norm(addQ)))
-          .map((i) => ({ tipo: 'ing' as const, id: i.id, nombre: i.nombre, meta: `${fmt(costoIngrediente(i))} / ${i.unidadBase === 'pieza' ? 'pza' : i.unidadBase}` })),
+          .map((i) => ({ tipo: 'ing' as const, id: i.id, nombre: i.nombre, meta: `${fmt(costoIngrediente(i))} / ${unitShort(i.unidadBase)}` })),
         ...catalogo.recetas
           .filter((r) => r.id !== id && !usadasRec.has(r.id) && r.rendimientoKg > 0 && norm(r.nombre).includes(norm(addQ)))
           .map((r) => ({ tipo: 'rec' as const, id: r.id, nombre: `◆ ${r.nombre}`, meta: `${fmt(costoReceta(idx, r.id) / r.rendimientoKg)} / kg` })),
@@ -179,7 +200,7 @@ export function EditorRecetaScreen() {
       etiquetaSingular: draft.etiquetaSingular || 'pieza',
       rendimientoKg: draft.rendimientoKg,
       precioVenta: draft.esSubreceta ? null : draft.precioVenta,
-      ivaPct: 16,
+      ivaPct: receta?.ivaPct ?? 16,
       esSubreceta: draft.esSubreceta,
       alergenos: draft.alergenos,
       pasos: draft.pasos.filter((p) => p.trim()),
@@ -201,7 +222,8 @@ export function EditorRecetaScreen() {
     }
   }
 
-  const semColor = pct == null ? '#6E6A5E' : SEM[n].solid;
+  const nLineas = draft.lineas.length;
+  const nPasos = `${draft.pasos.length} ${draft.pasos.length === 1 ? 'paso' : 'pasos'}`;
 
   return (
     <div className="flex h-full flex-col bg-surface">
@@ -222,87 +244,162 @@ export function EditorRecetaScreen() {
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-auto px-5 pb-10">
-        {/* BarraCostoSticky */}
-        <div className="sticky top-0 z-10 -mx-1 mb-4 rounded-[18px] bg-choco-700 px-4 py-3 text-crema-100">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[11px] font-bold tracking-wide text-crema-100/60 uppercase">Costo total</div>
-              <div className="text-[20px] font-extrabold tabular-nums">{fmt(costo)}</div>
+      <div className="min-h-0 flex-1 overflow-auto px-3 pb-10">
+        {/* BarraCostoSticky: costo total · por porción/kilo · food cost */}
+        <div className="sticky top-0 z-30 flex items-center justify-between rounded-[18px] bg-choco-700 px-4 py-3 text-crema-100 shadow-[0_6px_18px_rgba(42,27,23,0.3)]">
+          <div>
+            <div className="text-[11px] tracking-[0.5px] text-[#C9BBA9] uppercase">Costo total</div>
+            <div className="text-[22px] font-extrabold tracking-[-0.5px] tabular-nums">{fmt(costo)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] tracking-[0.5px] text-[#C9BBA9] uppercase">
+              {draft.esSubreceta ? 'Por kilo' : `Por ${draft.etiquetaSingular || 'pieza'}`}
             </div>
-            <div>
-              <div className="text-[11px] font-bold tracking-wide text-crema-100/60 uppercase">
-                Por {draft.esSubreceta ? 'kilo' : draft.etiquetaSingular}
-              </div>
-              <div className="text-[20px] font-extrabold tabular-nums">{fmt(porUnidad)}</div>
+            <div className="text-[22px] font-extrabold tracking-[-0.5px] tabular-nums">{fmt(porUnidad)}</div>
+          </div>
+          <div className="flex flex-col items-end">
+            <div className="text-[11px] tracking-[0.5px] text-[#C9BBA9] uppercase">Food cost</div>
+            <div
+              className="mt-0.5 flex items-center gap-1.5 rounded-full px-2.5 py-[3px]"
+              style={{ background: pct == null ? '#6E6A5E' : SEM[n].solid }}
+            >
+              <span className="h-2 w-2 rounded-full bg-crema-100" />
+              <span className="text-[16px] font-extrabold">{pct == null ? '—' : `${Math.round(pct)}%`}</span>
             </div>
-            <span className="rounded-full px-3 py-1.5 text-[14px] font-extrabold text-white" style={{ background: semColor }}>
-              {pct == null ? '—' : `${Math.round(pct)}%`}
-            </span>
           </div>
         </div>
 
         {errorGuardar && (
-          <div className="mb-3 rounded-2xl bg-rojo-100 px-4 py-3 text-[13.5px] font-bold text-rojo-600">{errorGuardar}</div>
+          <div className="mt-3 rounded-2xl bg-rojo-100 px-4 py-3 text-[13.5px] font-bold text-rojo-600">{errorGuardar}</div>
         )}
 
-        <div className="space-y-3">
-          <Seccion titulo="Datos" abierta={open.datos} onToggle={() => setOpen((o) => ({ ...o, datos: !o.datos }))}>
-            <div className="space-y-3.5">
-              <Field label="Nombre" value={draft.nombre} placeholder="Nombre de la receta" onChange={(e) => mutate({ nombre: e.target.value })} />
+        <div className="mt-4 space-y-3">
+          <Seccion titulo="Datos de la receta" abierta={open.datos} onToggle={() => setOpen((o) => ({ ...o, datos: !o.datos }))}>
+            <div className="space-y-3 px-[18px] pb-[18px]">
               <div>
-                <div className="mb-1.5 text-[13px] font-bold text-ink-2">Categoría</div>
-                <div className="flex flex-wrap gap-2">
-                  {catalogo.categorias.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => mutate({ categoria: c })}
-                      className={`h-10 rounded-full border-[1.5px] px-3.5 text-[13.5px] font-bold ${
-                        draft.categoria === c ? 'border-choco-700 bg-choco-700 text-crema-100' : 'border-line bg-card text-ink-2'
-                      }`}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-[13px] font-bold text-ink-2">Porciones</div>
-                <Stepper valor={draft.porciones} onChange={(v) => mutate({ porciones: v })} />
-              </div>
-              <Field label="Etiqueta de porción" value={draft.etiqueta} placeholder="piezas, rebanadas…" onChange={(e) => mutate({ etiqueta: e.target.value, etiquetaSingular: e.target.value.replace(/s$/, '') })} />
-              <div>
-                <div className="mb-1.5 text-[13px] font-bold text-ink-2">Rendimiento</div>
-                <div className="flex items-center gap-3">
-                  <Field
-                    inputMode="decimal"
-                    value={draft.rendimientoKg > 0 ? String(rendEnGr ? Math.round(draft.rendimientoKg * 1000) : draft.rendimientoKg) : ''}
-                    placeholder="0"
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value.replace(/[^0-9.]/g, '')) || 0;
-                      mutate({ rendimientoKg: rendEnGr ? v / 1000 : v });
-                    }}
-                  />
-                  <ToggleUnidad opciones={['g', 'kg']} valor={rendEnGr ? 'g' : 'kg'} onChange={(u) => setRendEnGr(u === 'g')} />
-                </div>
-              </div>
-              <div>
-                <Field
-                  label="Precio de venta"
-                  prefix="$"
-                  inputMode="decimal"
-                  disabled={draft.esSubreceta}
-                  value={draft.precioVenta != null ? String(draft.precioVenta) : ''}
-                  placeholder={draft.esSubreceta ? '—' : '0.00'}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value.replace(/[^0-9.]/g, ''));
-                    mutate({ precioVenta: Number.isFinite(v) && v > 0 ? v : null });
-                  }}
+                <Etiqueta>Nombre</Etiqueta>
+                <input
+                  value={draft.nombre}
+                  placeholder="Nombre de la receta"
+                  onChange={(e) => mutate({ nombre: e.target.value })}
+                  className={`${inputClass} font-semibold`}
                 />
-                {draft.esSubreceta && (
-                  <p className="mt-1 text-[12.5px] text-ink-3">Se vende dentro de otras recetas.</p>
-                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Etiqueta>Categoría</Etiqueta>
+                  <div className="relative">
+                    <select
+                      value={draft.categoria}
+                      onChange={(e) => mutate({ categoria: e.target.value })}
+                      className={`${inputClass} appearance-none pr-8 font-semibold`}
+                    >
+                      {catalogo.categorias.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-ink-3">▾</span>
+                  </div>
+                </div>
+                <div>
+                  <Etiqueta>Porciones</Etiqueta>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      className="h-[50px] w-10 flex-none rounded-[14px] border-[1.5px] border-line bg-surface text-[20px] text-ink"
+                      onClick={() => mutate({ porciones: Math.max(1, draft.porciones - 1) })}
+                    >
+                      −
+                    </button>
+                    <div className="grid h-[50px] min-w-0 flex-1 place-items-center text-[17px] font-extrabold tabular-nums">
+                      {draft.porciones}
+                    </div>
+                    <button
+                      type="button"
+                      className="h-[50px] w-10 flex-none rounded-[14px] border-[1.5px] border-line bg-surface text-[20px] text-ink"
+                      onClick={() => mutate({ porciones: draft.porciones + 1 })}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Etiqueta>Etiqueta de porción</Etiqueta>
+                  <input
+                    value={draft.etiqueta}
+                    placeholder="piezas, rebanadas…"
+                    onChange={(e) => mutate({ etiqueta: e.target.value, etiquetaSingular: e.target.value.replace(/s$/, '') })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <Etiqueta>Rendimiento</Etiqueta>
+                  <div className="flex items-center gap-2">
+                    <input
+                      inputMode="decimal"
+                      value={bufVal('rend', draft.rendimientoKg > 0 ? String(rendEnGr ? Math.round(draft.rendimientoKg * 1000) : parseFloat(draft.rendimientoKg.toFixed(2))) : '')}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const limpio = e.target.value.replace(/[^0-9.]/g, '');
+                        setBuf({ k: 'rend', v: limpio });
+                        const v = parseFloat(limpio) || 0;
+                        mutate({ rendimientoKg: rendEnGr ? v / 1000 : v });
+                      }}
+                      onBlur={() => setBuf(null)}
+                      className={inputNumClass}
+                    />
+                    <div className="flex flex-none rounded-xl bg-fill p-[3px]">
+                      {(['g', 'kg'] as const).map((u) => (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => setRendEnGr(u === 'g')}
+                          className="rounded-[10px] px-2.5 py-2 text-[13px] font-bold"
+                          style={
+                            (u === 'g') === rendEnGr
+                              ? { background: '#43302A', color: '#F8F4E9' }
+                              : { color: 'var(--ink-2)' }
+                          }
+                        >
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Etiqueta>Precio de venta</Etiqueta>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[17px] font-bold text-ink-2">$</span>
+                    <input
+                      inputMode="decimal"
+                      disabled={draft.esSubreceta}
+                      value={bufVal('precio', draft.precioVenta != null ? String(draft.precioVenta) : '')}
+                      placeholder="—"
+                      onChange={(e) => {
+                        const limpio = e.target.value.replace(/[^0-9.]/g, '');
+                        setBuf({ k: 'precio', v: limpio });
+                        const v = parseFloat(limpio);
+                        mutate({ precioVenta: Number.isFinite(v) && v > 0 ? v : null });
+                      }}
+                      onBlur={() => setBuf(null)}
+                      className={inputNumClass}
+                    />
+                  </div>
+                  {draft.esSubreceta && (
+                    <p className="mt-1 text-[11.5px] text-ink-3">Se vende dentro de otras recetas</p>
+                  )}
+                </div>
+                <div>
+                  <Etiqueta>IVA</Etiqueta>
+                  <div className="flex h-[50px] items-center justify-between rounded-[14px] border-[1.5px] border-line bg-surface px-3.5 text-[15px] font-semibold">
+                    {receta?.ivaPct ?? 16}% <span className="text-ink-3">▾</span>
+                  </div>
+                </div>
               </div>
               <label className="flex items-center gap-3 py-1">
                 <input
@@ -316,82 +413,95 @@ export function EditorRecetaScreen() {
             </div>
           </Seccion>
 
-          <Seccion titulo="Ingredientes" abierta={open.ing} onToggle={() => setOpen((o) => ({ ...o, ing: !o.ing }))}>
-            <div className="space-y-2">
+          <Seccion titulo="Ingredientes" cuenta={nLineas} abierta={open.ing} onToggle={() => setOpen((o) => ({ ...o, ing: !o.ing }))}>
+            <div className="px-2.5 pb-3.5">
               {draft.lineas.map((l, i) => {
                 const ing = l.ingredienteId ? idx.ingredientes.get(l.ingredienteId) : undefined;
                 const sub = l.recetaId ? idx.recetas.get(l.recetaId) : undefined;
                 const costoLinea = ing
                   ? l.cantidad * costoIngrediente(ing)
                   : sub && sub.rendimientoKg > 0 ? (l.cantidad / sub.rendimientoKg) * costoReceta(idx, sub.id) : 0;
-                const dominante = costo > 0 && costoLinea / costo > 0.6;
-                return (
-                  <div
-                    key={i}
-                    className={`rounded-2xl border-[1.5px] px-3.5 py-3 ${
-                      sub ? 'border-[#E3D3E5] bg-[#F6EFF7]' : 'border-line bg-card'
-                    }`}
-                  >
-                    {/* Renglón 1: nombre (todo el ancho que sobre) + costo + quitar */}
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 truncate text-left text-[14.5px] font-bold"
-                        onClick={() => navigate(ing ? `/ingredientes/${ing.id}` : sub ? `/recetas/${sub.id}` : '#')}
-                      >
-                        {sub ? `◆ ${sub.nombre}` : ing?.nombre ?? '—'}
+                const setCantidad = (v: string) => {
+                  const limpio = v.replace(/[^0-9.]/g, '');
+                  setBuf({ k: `linea-${i}`, v: limpio });
+                  const num = parseFloat(limpio) || 0;
+                  mutate({ lineas: draft.lineas.map((x, xi) => (xi === i ? { ...x, cantidad: num } : x)) });
+                };
+                const quitar = () => mutate({ lineas: draft.lineas.filter((_, xi) => xi !== i) });
+
+                if (sub) {
+                  const share = costo > 0 ? Math.round((costoLinea / costo) * 100) : 0;
+                  return (
+                    <div key={i} className="mb-1.5 flex min-h-[60px] items-center gap-2.5 rounded-[14px] border-[1.5px] border-[#E3D3E5] bg-[#F6EFF7] px-2 py-3">
+                      <span className="flex-none text-[16px] text-[#7B4B84]">◆</span>
+                      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => navigate(`/recetas/${sub.id}`)}>
+                        <div className="truncate text-[15px] font-bold text-[#5C3763]">{sub.nombre}</div>
+                        <div className="text-[12px] font-bold" style={{ color: share > 60 ? '#A93226' : '#7B4B84' }}>
+                          {share}% del costo de esta receta
+                        </div>
                       </button>
-                      <span className="flex-none text-[15px] font-extrabold tabular-nums">{fmt(costoLinea)}</span>
-                      <button
-                        type="button"
-                        aria-label="Quitar línea"
-                        className="grid h-9 w-9 flex-none place-items-center text-[15px] font-bold text-ink-3"
-                        onClick={() => mutate({ lineas: draft.lineas.filter((_, xi) => xi !== i) })}
-                      >
+                      <div className="flex flex-none items-center gap-1.5">
+                        <label className="flex items-center gap-1 rounded-[10px] bg-[#EDE2EE] px-2 py-1.5">
+                          <input
+                            inputMode="decimal"
+                            value={bufVal(`linea-${i}`, String(l.cantidad))}
+                            onChange={(e) => setCantidad(e.target.value)}
+                            onBlur={() => setBuf(null)}
+                            className="w-12 bg-transparent text-right text-[14px] font-semibold text-[#5C3763] outline-none"
+                          />
+                          <span className="text-[14px] font-semibold text-[#5C3763]">kg</span>
+                        </label>
+                        <span className="w-[62px] text-right text-[15px] font-extrabold text-[#43302A] tabular-nums">{fmt(costoLinea)}</span>
+                        <button type="button" aria-label="Quitar subreceta" className="p-1.5 text-[16px] font-bold text-[#A93226]" onClick={quitar}>
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={i} className="flex min-h-14 items-center gap-2.5 border-b border-line px-2 py-3">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 truncate text-left text-[15px] font-semibold"
+                      onClick={() => ing && navigate(`/ingredientes/${ing.id}`)}
+                    >
+                      {ing?.nombre ?? '—'}
+                    </button>
+                    <div className="flex flex-none items-center gap-1.5">
+                      <label className="flex items-center gap-1 rounded-[10px] bg-fill px-2 py-1.5">
+                        <input
+                          inputMode="decimal"
+                          value={bufVal(`linea-${i}`, String(l.cantidad))}
+                          onChange={(e) => setCantidad(e.target.value)}
+                          onBlur={() => setBuf(null)}
+                          className="w-12 bg-transparent text-right text-[14px] font-semibold text-ink-2 outline-none"
+                        />
+                        <span className="text-[14px] font-semibold text-ink-2">{ing ? unitShort(ing.unidadBase) : 'kg'}</span>
+                      </label>
+                      <span className="w-[62px] text-right text-[15px] font-extrabold tabular-nums">{fmt(costoLinea)}</span>
+                      <button type="button" aria-label="Quitar línea" className="p-1.5 text-[16px] font-bold text-[#A93226]" onClick={quitar}>
                         ✕
                       </button>
                     </div>
-                    {/* Renglón 2: cantidad + unidad, con la lectura amable a la derecha */}
-                    <div className="mt-2 flex items-center gap-2">
-                      <input
-                        inputMode="decimal"
-                        className="h-10 w-24 flex-none rounded-xl bg-fill px-2 text-center text-[14px] font-bold outline-none"
-                        value={String(l.cantidad)}
-                        onChange={(e) => {
-                          const v = parseFloat(e.target.value.replace(/[^0-9.]/g, '')) || 0;
-                          mutate({ lineas: draft.lineas.map((x, xi) => (xi === i ? { ...x, cantidad: v } : x)) });
-                        }}
-                      />
-                      <span className="flex-none text-[13px] font-bold text-ink-3">
-                        {ing ? (ing.unidadBase === 'pieza' ? 'pza' : ing.unidadBase) : 'kg'}
-                      </span>
-                      {ing && (
-                        <span className="ml-auto text-[12.5px] text-ink-3">{fmtQty(l.cantidad, ing.unidadBase)}</span>
-                      )}
-                    </div>
-                    {sub && dominante && (
-                      <div className="mt-1 text-[12.5px] font-bold text-rojo-600">
-                        {Math.round((costoLinea / costo) * 100)}% del costo de esta receta
-                      </div>
-                    )}
                   </div>
                 );
               })}
 
-              <div className="relative">
+              <div className="mt-2.5 px-2">
                 <input
                   value={addQ}
                   onChange={(e) => setAddQ(e.target.value)}
                   placeholder="+ Agregar ingrediente… escribe para buscar"
-                  className="w-full rounded-2xl border-[1.5px] border-dashed border-line bg-transparent px-4 py-3.5 text-[14px] font-bold outline-none placeholder:text-ink-3"
+                  className="h-12 w-full rounded-[14px] border-[1.5px] border-dashed border-line bg-surface px-3.5 text-[14px] outline-none placeholder:text-ink-3"
                 />
-                {matches.length > 0 && (
-                  <div className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border-[1.5px] border-line bg-card shadow-lg">
+                {addQ.trim() !== '' && (
+                  <div className="mt-1.5 overflow-hidden rounded-[14px] border-[1.5px] border-line bg-card shadow-[0_8px_20px_rgba(42,27,23,0.12)]">
                     {matches.map((m) => (
                       <button
                         key={`${m.tipo}-${m.id}`}
                         type="button"
-                        className="flex w-full items-center justify-between gap-3 border-b-[1.5px] border-line px-4 py-3 text-left last:border-b-0"
+                        className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-line px-3.5 py-3 text-left last:border-b-0"
                         onClick={() => {
                           const nueva: LineaDraft = m.tipo === 'ing'
                             ? { ingredienteId: m.id, cantidad: idx.ingredientes.get(m.id)?.unidadBase === 'pieza' ? 1 : 0.1 }
@@ -400,10 +510,15 @@ export function EditorRecetaScreen() {
                           setAddQ('');
                         }}
                       >
-                        <span className="text-[14px] font-bold">{m.nombre}</span>
-                        <span className="text-[12.5px] text-ink-3">{m.meta}</span>
+                        <span className="text-[14.5px] font-semibold">{m.nombre}</span>
+                        <span className="text-[13px] text-ink-2">{m.meta}</span>
                       </button>
                     ))}
+                    {matches.length === 0 && (
+                      <div className="px-3.5 py-3 text-[13px] text-ink-3">
+                        No hay ingredientes con ese nombre. Créalo primero en la pestaña Ingredientes.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -411,58 +526,63 @@ export function EditorRecetaScreen() {
           </Seccion>
 
           <Seccion titulo="¿De dónde viene el costo?" abierta={open.costo} onToggle={() => setOpen((o) => ({ ...o, costo: !o.costo }))}>
-            {partesDona.length === 0 ? (
-              <p className="text-[13.5px] text-ink-3">Agrega ingredientes y aquí verás qué se lleva tu dinero.</p>
-            ) : (
-              <DonaCosto partes={partesDona} total={costo} />
-            )}
+            <div className="px-[18px] pb-5">
+              {partesDona.length === 0 ? (
+                <p className="text-[14px] text-ink-3">Agrega ingredientes y aquí verás qué tanto pesa cada uno en el costo.</p>
+              ) : (
+                <DonaCosto partes={partesDona} total={costo} />
+              )}
+            </div>
           </Seccion>
 
-          <Seccion titulo="Ganancia real · ya con gastos de operación" abierta={open.ganancia} onToggle={() => setOpen((o) => ({ ...o, ganancia: !o.ganancia }))}>
-            <div className="space-y-2 text-[14px]">
+          <div className="rounded-[20px] border-[1.5px] border-line bg-card px-[18px] py-4">
+            <div className="mb-3 text-[16px] font-bold">
+              Ganancia real <span className="font-semibold text-ink-3">· ya con gastos de operación</span>
+            </div>
+            <div className="space-y-2 text-[14.5px]">
               <div className="flex justify-between"><span className="text-ink-2">Ingredientes</span><b className="tabular-nums">{fmt(costo)}</b></div>
               <div className="flex justify-between">
                 <span className="text-ink-2">Operación de la cocina ({Math.round(tasa * 100)}%)</span>
                 <b className="tabular-nums">{fmt(costo * tasa)}</b>
               </div>
-              <div className="flex justify-between border-t-[1.5px] border-line pt-2">
-                <span className="font-extrabold">Costo real</span><b className="tabular-nums">{fmt(costoReal)}</b>
+              <div className="flex justify-between border-t border-line pt-2">
+                <span className="font-bold">Costo real</span>
+                <span className="text-[16px] font-extrabold tabular-nums">{fmt(costoReal)}</span>
               </div>
-              {draft.esSubreceta ? (
-                <div className="rounded-2xl bg-crema-200 p-4 text-center dark:bg-fill">
-                  <div className="text-[13px] text-ink-2">Costo real por kilo</div>
-                  <div className="text-[26px] font-extrabold tabular-nums">
-                    {fmt(draft.rendimientoKg > 0 ? costoReal / draft.rendimientoKg : 0)}
-                  </div>
-                  <div className="text-[12.5px] text-ink-3">Úsalo para decidir el precio de lo que la lleve.</div>
-                </div>
-              ) : (
-                <div className="rounded-2xl bg-crema-200 p-4 text-center dark:bg-fill">
-                  <div className="text-[13px] text-ink-2">Ganancia por {draft.etiquetaSingular}</div>
-                  <div
-                    className="text-[26px] font-extrabold tabular-nums"
-                    style={{ color: ganancia != null && ganancia > 0 ? '#656D30' : '#C0392B' }}
-                  >
-                    {ganancia == null ? '—' : fmt(ganancia)}
-                  </div>
-                </div>
-              )}
-              <p className="text-[12px] text-ink-3">Tus gastos de operación se configuran en <b>Ajustes</b>.</p>
             </div>
-          </Seccion>
+            {draft.esSubreceta || draft.precioVenta == null ? (
+              <p className="mt-3.5 text-[13px] leading-normal text-ink-3">
+                Costo real: {draft.rendimientoKg > 0 ? `${fmt(costoReal / draft.rendimientoKg)} / kg` : '—'}. La ganancia
+                se calcula en las recetas donde se usa esta subreceta.
+              </p>
+            ) : (
+              <div className="mt-3.5 flex items-baseline gap-2 rounded-[14px] bg-fill px-4 py-3.5">
+                <span
+                  className="text-[26px] font-extrabold tracking-[-0.5px] tabular-nums"
+                  style={{ color: ganancia != null && ganancia > 0 ? '#656D30' : '#C0392B' }}
+                >
+                  {ganancia == null ? '—' : fmt(ganancia)}
+                </span>
+                <span className="text-[13.5px] font-semibold text-ink-2">
+                  de ganancia por {draft.etiquetaSingular || 'pieza'}
+                </span>
+              </div>
+            )}
+            <p className="mt-2.5 text-[12px] text-ink-3">Tus gastos de operación se configuran en <b>Ajustes</b>.</p>
+          </div>
 
-          <Seccion titulo="Elaboración" abierta={open.elab} onToggle={() => setOpen((o) => ({ ...o, elab: !o.elab }))}>
-            <div className="space-y-2.5">
+          <Seccion titulo="Elaboración" cuenta={nPasos} abierta={open.elab} onToggle={() => setOpen((o) => ({ ...o, elab: !o.elab }))}>
+            <div className="space-y-3 px-[18px] pb-[18px]">
               {draft.pasos.map((p, i) => (
                 <div key={i} className="flex gap-3">
-                  <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-choco-700 text-[13px] font-extrabold text-crema-100">
+                  <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-choco-700 text-[13px] font-bold text-crema-100">
                     {i + 1}
                   </span>
                   <textarea
                     value={p}
                     rows={2}
                     onChange={(e) => mutate({ pasos: draft.pasos.map((x, xi) => (xi === i ? e.target.value : x)) })}
-                    className="min-w-0 flex-1 resize-none rounded-xl border-[1.5px] border-line bg-card px-3 py-2 text-[14px] outline-none focus:border-burgundy-600"
+                    className="min-w-0 flex-1 resize-none rounded-xl border-[1.5px] border-line bg-surface px-3 py-2 text-[14.5px] leading-normal outline-none focus:border-burgundy-600"
                   />
                   <button
                     type="button"
@@ -475,7 +595,7 @@ export function EditorRecetaScreen() {
               ))}
               <button
                 type="button"
-                className="w-full rounded-2xl border-[1.5px] border-dashed border-line py-3 text-[14px] font-bold text-ink-2"
+                className="flex min-h-11 items-center text-[14px] font-bold text-ink-2"
                 onClick={() => mutate({ pasos: [...draft.pasos, ''] })}
               >
                 + Agregar paso
@@ -483,8 +603,8 @@ export function EditorRecetaScreen() {
             </div>
           </Seccion>
 
-          <Seccion titulo="Alérgenos" abierta={open.alerg} onToggle={() => setOpen((o) => ({ ...o, alerg: !o.alerg }))}>
-            <div className="flex flex-wrap gap-2">
+          <Seccion titulo="Alérgenos" cuenta={draft.alergenos.length} abierta={open.alerg} onToggle={() => setOpen((o) => ({ ...o, alerg: !o.alerg }))}>
+            <div className="flex flex-wrap gap-2 px-[18px] pb-[18px]">
               {catalogo.alergenos.map((a) => {
                 const activo = draft.alergenos.includes(a);
                 return (
@@ -494,11 +614,11 @@ export function EditorRecetaScreen() {
                     onClick={() =>
                       mutate({ alergenos: activo ? draft.alergenos.filter((x) => x !== a) : [...draft.alergenos, a] })
                     }
-                    className="h-11 rounded-full border-[1.5px] px-3.5 text-[13.5px] font-bold"
+                    className="flex h-11 items-center rounded-full border-[1.5px] px-4 text-[14px] font-semibold"
                     style={
                       activo
                         ? { background: '#F1E2D9', color: '#9D2C34', borderColor: '#DCA795' }
-                        : { borderColor: 'var(--line)', color: 'var(--ink-2)' }
+                        : { background: 'var(--surface)', color: 'var(--ink-2)', borderColor: 'var(--line)' }
                     }
                   >
                     {a}
@@ -509,13 +629,13 @@ export function EditorRecetaScreen() {
           </Seccion>
 
           <Seccion titulo="Fotos" abierta={open.fotos} onToggle={() => setOpen((o) => ({ ...o, fotos: !o.fotos }))}>
-            <div className="flex gap-3">
+            <div className="flex gap-2.5 px-[18px] pb-[18px]">
               {(receta?.fotos ?? []).map((f) => (
                 <img key={f} src={f} alt="" className="h-[88px] w-[88px] rounded-2xl object-cover" />
               ))}
               <button
                 type="button"
-                className="grid h-[88px] w-[88px] flex-none place-items-center rounded-2xl border-[1.5px] border-dashed border-line text-[26px] text-ink-3"
+                className="grid h-[88px] w-[88px] flex-none place-items-center rounded-2xl border-[1.5px] border-dashed border-line text-[28px] text-ink-3"
               >
                 +
               </button>

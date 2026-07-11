@@ -82,10 +82,15 @@ export function RecetasScreen() {
                     <div className="text-[13px] text-ink-2">
                       {receta.categoria} · {receta.esSubreceta ? receta.etiqueta : `${receta.porciones} ${receta.etiqueta}`}
                     </div>
-                    <div className="mt-1 flex items-baseline gap-2">
-                      <span className="text-[17px] font-extrabold tabular-nums">{fmt(costo)}</span>
-                      <span className="text-[12.5px] text-ink-3">
-                        {fmt(porPorcion)} / {receta.etiquetaSingular}
+                    <div className="mt-1 flex items-baseline gap-3">
+                      <span>
+                        <span className="text-[17px] font-extrabold tracking-[-0.3px] tabular-nums">{fmt(costo)}</span>
+                        <span className="text-[12px] text-ink-2"> total</span>
+                      </span>
+                      <span className="text-[13px] text-ink-2">
+                        {receta.esSubreceta
+                          ? receta.rendimientoKg > 0 ? `${fmt(porPorcion)} / kg` : '—'
+                          : `${fmt(porPorcion)} / ${receta.etiquetaSingular}`}
                       </span>
                     </div>
                   </div>

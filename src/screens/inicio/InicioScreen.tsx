@@ -18,6 +18,7 @@ interface Atencion {
   nombre: string;
   motivo: string;
   pill: string;
+  dot: boolean; // solo los pills de food cost llevan punto
   nivel: Nivel;
   orden: number; // rojo 0 · caduca≤7 0.5 · ámbar 1 · caduca≤30 1.5 · queda poco 1.6 · precio viejo 2
 }
@@ -69,12 +70,12 @@ export function InicioScreen() {
             }
           }
         }
-        items.push({ id: receta.id, to: `/recetas/${receta.id}`, nombre: receta.nombre, motivo, pill: `${Math.round(pct)}%`, nivel: 'rojo', orden: 0 });
+        items.push({ id: receta.id, to: `/recetas/${receta.id}`, nombre: receta.nombre, motivo, pill: `${Math.round(pct)}%`, dot: true, nivel: 'rojo', orden: 0 });
       } else if (n === 'ambar' && pct != null) {
         items.push({
           id: receta.id, to: `/recetas/${receta.id}`, nombre: receta.nombre,
           motivo: `Food cost ${Math.round(pct)}%, cerca de tu límite de ${Math.round(objetivo)}%`,
-          pill: `${Math.round(pct)}%`, nivel: 'ambar', orden: 1,
+          pill: `${Math.round(pct)}%`, dot: true, nivel: 'ambar', orden: 1,
         });
       }
     }
@@ -86,14 +87,14 @@ export function InicioScreen() {
         items.push({
           id: `caduca-${ing.id}`, to: '/inventario', nombre: ing.nombre,
           motivo: `Está por caducar: quedan ${d} ${d === 1 ? 'día' : 'días'}`,
-          pill: 'Caduca pronto', nivel: caduca <= 7 ? 'rojo' : 'ambar', orden: caduca <= 7 ? 0.5 : 1.5,
+          pill: 'Caduca pronto', dot: false, nivel: caduca <= 7 ? 'rojo' : 'ambar', orden: caduca <= 7 ? 0.5 : 1.5,
         });
       }
       if (quedaPoco(ing)) {
         items.push({
           id: `poco-${ing.id}`, to: '/inventario', nombre: ing.nombre,
           motivo: `Quedan ${fmtQty(ing.existencia, ing.unidadBase)} y tu mínimo es ${fmtQty(ing.minimo, ing.unidadBase)}`,
-          pill: 'Queda poco', nivel: 'ambar', orden: 1.6,
+          pill: 'Queda poco', dot: false, nivel: 'ambar', orden: 1.6,
         });
       }
       const dias = diasDesdePrecio(ing);
@@ -101,7 +102,7 @@ export function InicioScreen() {
         items.push({
           id: `viejo-${ing.id}`, to: `/ingredientes/${ing.id}`, nombre: ing.nombre,
           motivo: `Su precio tiene ${dias >= 90 ? `${Math.round(dias / 30)} meses` : `${dias} días`} sin actualizarse`,
-          pill: 'Precio viejo', nivel: 'ambar', orden: 2,
+          pill: 'Precio viejo', dot: false, nivel: 'ambar', orden: 2,
         });
       }
     }
@@ -153,8 +154,8 @@ export function InicioScreen() {
               <div className="text-[13.5px] text-ink-2">{fecha}</div>
               <h1 className="text-[26px] font-extrabold tracking-[-0.5px]">Hola, {primerNombre}</h1>
             </div>
-            <div className="grid h-12 w-12 flex-none place-items-center overflow-hidden rounded-full bg-burgundy-600">
-              <img src="/logo-crema.png" alt="" className="h-8 w-8 object-contain" />
+            <div className="grid h-12 w-12 flex-none place-items-center rounded-full bg-burgundy-600 text-[17px] font-bold text-crema-100">
+              {primerNombre.charAt(0).toUpperCase()}
             </div>
           </div>
         </header>
@@ -193,17 +194,21 @@ export function InicioScreen() {
         ) : (
           <>
             <div className="grid grid-cols-3 gap-2.5">
-              <Card className="px-3 py-4 text-center">
-                <div className="text-[28px] font-extrabold tabular-nums">{stats?.recetas ?? 0}</div>
-                <div className="text-[12px] font-bold text-ink-2">recetas</div>
+              <Card className="cursor-pointer px-3 py-3.5" onClick={() => navigate('/recetas')}>
+                <div className="text-[28px] font-extrabold tracking-[-1px] tabular-nums">{stats?.recetas ?? 0}</div>
+                <div className="mt-0.5 text-[12.5px] leading-[1.3] text-ink-2">recetas costeadas</div>
               </Card>
-              <div className="rounded-[20px] px-3 py-4 text-center" style={{ background: '#EFF0E3', color: '#59622B' }}>
-                <div className="text-[28px] font-extrabold tabular-nums">{Math.round(stats?.margenProm ?? 0)}%</div>
-                <div className="text-[12px] font-bold">margen prom.</div>
+              <div className="rounded-[20px] border-[1.5px] px-3 py-3.5" style={{ background: '#EFF0E3', borderColor: '#D5D8BC' }}>
+                <div className="text-[28px] font-extrabold tracking-[-1px] tabular-nums" style={{ color: '#59622B' }}>
+                  {Math.round(stats?.margenProm ?? 0)}%
+                </div>
+                <div className="mt-0.5 text-[12.5px] leading-[1.3]" style={{ color: '#6D7346' }}>margen promedio</div>
               </div>
-              <div className="rounded-[20px] px-3 py-4 text-center" style={{ background: '#F7E9E4', color: '#9D2C34' }}>
-                <div className="text-[28px] font-extrabold tabular-nums">{atencion.length}</div>
-                <div className="text-[12px] font-bold">necesitan atención</div>
+              <div className="rounded-[20px] border-[1.5px] px-3 py-3.5" style={{ background: '#F7E9E4', borderColor: '#E8CFC5' }}>
+                <div className="text-[28px] font-extrabold tracking-[-1px] tabular-nums" style={{ color: '#9D2C34' }}>
+                  {atencion.length}
+                </div>
+                <div className="mt-0.5 text-[12.5px] leading-[1.3]" style={{ color: '#9D5347' }}>necesitan atención</div>
               </div>
             </div>
 
@@ -227,9 +232,10 @@ export function InicioScreen() {
                         <div className="text-[13px] text-ink-2">{a.motivo}</div>
                       </div>
                       <span
-                        className="flex-none rounded-full px-2.5 py-1 text-[12px] font-bold"
+                        className="flex flex-none items-center gap-[5px] rounded-full px-2.5 py-[5px] text-[13px] font-bold"
                         style={{ background: SEM[a.nivel].bg, color: SEM[a.nivel].tx }}
                       >
+                        {a.dot && <span className="h-2 w-2 rounded-full" style={{ background: SEM[a.nivel].dot }} />}
                         {a.pill}
                       </span>
                     </Card>
